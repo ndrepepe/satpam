@@ -19,7 +19,11 @@ interface Location {
   created_at: string;
 }
 
-const LocationList = () => {
+interface LocationListProps {
+  refreshKey: number; // Menambahkan prop refreshKey
+}
+
+const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Menerima prop refreshKey
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -43,7 +47,7 @@ const LocationList = () => {
 
   useEffect(() => {
     fetchLocations();
-  }, []);
+  }, [refreshKey]); // Menambahkan refreshKey sebagai dependensi
 
   const handleDeleteLocation = async (id: string, name: string) => {
     if (window.confirm(`Apakah Anda yakin ingin menghapus lokasi "${name}"?`)) {
@@ -76,7 +80,6 @@ const LocationList = () => {
   };
 
   const handlePrintQrCode = (locationId: string) => {
-    // Open the print page in a new window/tab
     window.open(`/print-qr/${locationId}`, '_blank', 'width=600,height=700,resizable=yes,scrollbars=yes');
   };
 
@@ -87,7 +90,7 @@ const LocationList = () => {
         <TableHeader>
           <TableRow>
             <TableHead>Nama Lokasi</TableHead>
-            <TableHead>QR Code</TableHead> {/* Changed column header */}
+            <TableHead>QR Code</TableHead>
             <TableHead>Dibuat Pada</TableHead>
             <TableHead className="text-right">Aksi</TableHead>
           </TableRow>

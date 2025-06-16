@@ -15,6 +15,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [locationListRefreshKey, setLocationListRefreshKey] = useState(0); // State baru
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -49,6 +50,10 @@ const AdminDashboard = () => {
     checkAdminStatus();
   }, [session, loading, navigate]);
 
+  const handleLocationCreated = () => {
+    setLocationListRefreshKey(prevKey => prevKey + 1); // Increment key to trigger refresh
+  };
+
   if (loading || profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -80,8 +85,8 @@ const AdminDashboard = () => {
             </TabsContent>
             <TabsContent value="locations" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Buat Lokasi Baru</h3>
-              <LocationForm />
-              <LocationList />
+              <LocationForm onLocationCreated={handleLocationCreated} /> {/* Meneruskan callback */}
+              <LocationList refreshKey={locationListRefreshKey} /> {/* Meneruskan refreshKey */}
             </TabsContent>
           </Tabs>
         </CardContent>
