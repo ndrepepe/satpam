@@ -45,7 +45,14 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
   }, [personnel, form]);
 
   const onSubmit = async (values: EditPersonnelFormValues) => {
-    if (!personnel) return;
+    if (!personnel) {
+      console.error("No personnel selected for update.");
+      toast.error("Tidak ada personel yang dipilih untuk diperbarui.");
+      return;
+    }
+
+    console.log("Attempting to update personnel with ID:", personnel.id);
+    console.log("New values to send:", values);
 
     try {
       const { error } = await supabase
@@ -58,15 +65,19 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
         .eq('id', personnel.id);
 
       if (error) {
-        throw error;
+        console.error("Supabase update error:", error); // Log the actual error
+        toast.error(`Gagal memperbarui profil: ${error.message}`);
+        return;
       }
 
+      console.log("Supabase update successful (no error returned).");
       toast.success(`Profil ${values.first_name} ${values.last_name} berhasil diperbarui.`);
       onPersonnelUpdated(); // Panggil callback untuk refresh daftar
+      console.log("onPersonnelUpdated called.");
       onClose(); // Tutup modal
     } catch (error: any) {
       toast.error(`Gagal memperbarui profil: ${error.message}`);
-      console.error("Error updating personnel profile:", error);
+      console.error("Error updating personnel profile (catch block):", error);
     }
   };
 

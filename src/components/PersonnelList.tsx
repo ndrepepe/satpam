@@ -36,6 +36,7 @@ const PersonnelList = () => {
       console.error("Error fetching personnel:", error);
       toast.error("Gagal memuat daftar personel.");
     } else if (data) {
+      console.log("Fetched personnel data:", data); // Log data received
       setPersonnel(data);
     }
     setLoading(false);
