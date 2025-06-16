@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { QRCode } from 'qrcode.react'; // Mengubah impor menjadi named import
+import QRCode from 'qrcode.react'; // Mengembalikan ke impor default
 import { v4 as uuidv4 } from 'uuid';
 
 const locationSchema = z.object({
