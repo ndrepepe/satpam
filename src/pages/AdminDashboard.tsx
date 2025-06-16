@@ -1,4 +1,4 @@
-import React, { useEffect, useState } => {
+import React, { useEffect, useState } from 'react';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -76,7 +76,7 @@ const AdminDashboard = () => {
             <TabsContent value="personnel" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Tambah Personel Satpam Baru</h3>
               <PersonnelForm />
-              <PersonnelList isAdmin={isAdmin} /> {/* Meneruskan prop isAdmin */}
+              <PersonnelList isAdmin={isAdmin} />
             </TabsContent>
             <TabsContent value="locations" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Buat Lokasi Baru</h3>
