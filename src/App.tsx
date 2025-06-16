@@ -2,18 +2,43 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"; // Import useLocation
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/AdminDashboard";
 import ScanLocation from "./pages/ScanLocation";
-import PrintQRCode from "./pages/PrintQRCode"; // Import PrintQRCode
+import PrintQRCode from "./pages/PrintQRCode";
 import { SessionContextProvider } from "./integrations/supabase/SessionContext";
 import Navbar from "./components/Navbar";
 
 const queryClient = new QueryClient();
+
+const AppContent = () => {
+  const location = useLocation();
+  const isPrintPage = location.pathname.startsWith('/print-qr/');
+
+  return (
+    <SessionContextProvider>
+      <div className="flex flex-col min-h-screen">
+        {!isPrintPage && <Navbar />} {/* Conditionally render Navbar */}
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/scan-location" element={<ScanLocation />} />
+            <Route path="/print-qr/:id" element={<PrintQRCode />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </main>
+      </div>
+    </SessionContextProvider>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -21,23 +46,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <SessionContextProvider>
-          <div className="flex flex-col min-h-screen">
-            <Navbar />
-            <main className="flex-grow">
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/scan-location" element={<ScanLocation />} />
-                <Route path="/print-qr/:id" element={<PrintQRCode />} /> {/* Add PrintQRCode route */}
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-          </div>
-        </SessionContextProvider>
+        <AppContent /> {/* Render AppContent inside BrowserRouter */}
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
