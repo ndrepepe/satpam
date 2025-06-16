@@ -9,7 +9,7 @@ const Navbar = () => {
   const { session, loading, user } = useSession();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isSatpam, setIsSatpam] = useState(false); // State baru untuk peran satpam
+  const [isSatpam, setIsSatpam] = useState(false);
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -67,12 +67,12 @@ const Navbar = () => {
         <div className="space-x-4">
           {session ? (
             <>
-              <Link to="/" className="hover:underline">Beranda</Link>
+              {/* Tautan Beranda dihapus */}
               <Link to="/profile" className="hover:underline">Profil</Link>
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
               )}
-              {isSatpam && ( // Tampilkan hanya untuk peran satpam
+              {isSatpam && (
                 <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
               )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
