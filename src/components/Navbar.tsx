@@ -48,17 +48,16 @@ const Navbar = () => {
       if (error) {
         // Jika error adalah 'Auth session missing', anggap sebagai logout berhasil
         if (error.message === 'Auth session missing!') {
-          console.warn("Logout attempted but session was already missing. Navigating to login.");
+          console.warn("Logout attempted but session was already missing. SessionContext should handle navigation.");
           toast.success("Anda telah berhasil logout.");
-          navigate('/login'); // Navigasi manual sebagai fallback
+          // Tidak perlu navigate('/login') di sini, biarkan SessionContext yang menangani
         } else {
           // Untuk error lainnya, lempar error agar ditangkap di blok catch
           throw error;
         }
       } else {
-        // Jika tidak ada error, logout berhasil. Navigasi secara eksplisit ke halaman login.
+        // Jika tidak ada error, logout berhasil. Navigasi akan ditangani oleh SessionContext
         toast.success("Berhasil logout!");
-        navigate('/login');
       }
     } catch (error: any) {
       toast.error(`Gagal logout: ${error.message}`);

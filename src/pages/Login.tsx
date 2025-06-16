@@ -2,18 +2,21 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // Import useLocation
 import { useSession } from '@/integrations/supabase/SessionContext';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // Gunakan useLocation di sini
   const { session, loading } = useSession();
 
   useEffect(() => {
+    console.log('Login Page useEffect: session:', session, 'loading:', loading, 'Path:', location.pathname);
     if (!loading && session) {
+      console.log('Login Page useEffect: Session exists and not loading, navigating to /');
       navigate('/');
     }
-  }, [session, loading, navigate]);
+  }, [session, loading, navigate, location.pathname]); // Tambahkan location.pathname sebagai dependensi
 
   if (loading) {
     return <div>Loading...</div>;
@@ -37,7 +40,7 @@ const Login = () => {
               },
             },
           }}
-          theme="light" // Menggunakan tema terang
+          theme="light"
           redirectTo={window.location.origin}
         />
       </div>
