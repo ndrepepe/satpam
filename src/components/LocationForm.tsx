@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import QRCode from 'qrcode.react'; // Mengembalikan ke impor default
+import { QRCode } from 'qrcode.react'; // Mengubah ke named import
 import { v4 as uuidv4 } from 'uuid';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -94,7 +94,7 @@ const LocationForm = () => {
             <CardTitle>QR Code untuk {locationName}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center">
-            <QRCode // Menggunakan QRCode langsung
+            <QRCode
               id="qrcode-canvas"
               value={qrCodeValue}
               size={256}
