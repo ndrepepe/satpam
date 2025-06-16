@@ -6,9 +6,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
-import Profile from "./pages/Profile"; // Import Profile page
+import Profile from "./pages/Profile";
+import AdminDashboard from "./pages/AdminDashboard";
+import ScanLocation from "./pages/ScanLocation"; // Import ScanLocation
 import { SessionContextProvider } from "./integrations/supabase/SessionContext";
-import Navbar from "./components/Navbar"; // Import Navbar
+import Navbar from "./components/Navbar";
 
 const queryClient = new QueryClient();
 
@@ -19,13 +21,15 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <SessionContextProvider>
-          <div className="flex flex-col min-h-screen"> {/* Add a flex container for layout */}
-            <Navbar /> {/* Place Navbar here */}
-            <main className="flex-grow"> {/* Main content area */}
+          <div className="flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-grow">
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/profile" element={<Profile />} /> {/* Add Profile route */}
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/scan-location" element={<ScanLocation />} /> {/* Add ScanLocation route */}
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

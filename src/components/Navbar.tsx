@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,8 +6,36 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 const Navbar = () => {
-  const { session, loading } = useSession();
+  const { session, loading, user } = useSession();
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching user role for Navbar:", error);
+          setIsAdmin(false);
+        } else if (data?.role === 'admin') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
+    };
+
+    if (!loading) {
+      checkAdminStatus();
+    }
+  }, [user, loading]);
 
   const handleLogout = async () => {
     try {
@@ -24,7 +52,7 @@ const Navbar = () => {
   };
 
   if (loading) {
-    return null; // Atau tampilkan skeleton loading jika diinginkan
+    return null;
   }
 
   return (
@@ -36,6 +64,9 @@ const Navbar = () => {
             <>
               <Link to="/" className="hover:underline">Beranda</Link>
               <Link to="/profile" className="hover:underline">Profil</Link>
+              {isAdmin && (
+                <Link to="/admin" className="hover:underline">Admin</Link>
+              )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
                 Logout
               </Button>
