@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import * as QRCode from 'qrcode.react';
+import QRCode from 'qrcode.react'; // Mengembalikan ke impor default
 import { v4 as uuidv4 } from 'uuid';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Menambahkan impor Card components
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const locationSchema = z.object({
   name: z.string().min(1, "Nama lokasi wajib diisi"),
@@ -94,7 +94,7 @@ const LocationForm = () => {
             <CardTitle>QR Code untuk {locationName}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center">
-            <QRCode.QRCode
+            <QRCode // Menggunakan QRCode langsung
               id="qrcode-canvas"
               value={qrCodeValue}
               size={256}
