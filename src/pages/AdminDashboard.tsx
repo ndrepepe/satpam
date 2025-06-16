@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } => {
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PersonnelForm from '@/components/PersonnelForm';
-import LocationForm from '@/components/LocationForm';
 import PersonnelList from '@/components/PersonnelList';
-import LocationList from '@/components/LocationList'; // Import LocationList
+import LocationForm from '@/components/LocationForm';
+import LocationList from '@/components/LocationList';
 import { toast } from 'sonner';
 
 const AdminDashboard = () => {
@@ -76,12 +76,12 @@ const AdminDashboard = () => {
             <TabsContent value="personnel" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Tambah Personel Satpam Baru</h3>
               <PersonnelForm />
-              <PersonnelList />
+              <PersonnelList isAdmin={isAdmin} /> {/* Meneruskan prop isAdmin */}
             </TabsContent>
             <TabsContent value="locations" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Buat Lokasi Baru</h3>
               <LocationForm />
-              <LocationList /> {/* Menambahkan daftar lokasi di sini */}
+              <LocationList />
             </TabsContent>
           </Tabs>
         </CardContent>

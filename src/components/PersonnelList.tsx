@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, supabaseAdmin } from '@/integrations/supabase/client'; // Import supabaseAdmin
+import { supabase, supabaseAdmin } from '@/integrations/supabase/client';
 import {
   Table,
   TableBody,
@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import EditPersonnelModal from './EditPersonnelModal'; // Import the new modal
+import EditPersonnelModal from './EditPersonnelModal';
 
 interface Profile {
   id: string;
@@ -20,7 +20,11 @@ interface Profile {
   role?: string;
 }
 
-const PersonnelList = () => {
+interface PersonnelListProps {
+  isAdmin: boolean; // Menambahkan prop isAdmin
+}
+
+const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Menerima prop isAdmin
   const [personnel, setPersonnel] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -36,7 +40,7 @@ const PersonnelList = () => {
       console.error("Error fetching personnel:", error);
       toast.error("Gagal memuat daftar personel.");
     } else if (data) {
-      console.log("Fetched personnel data:", data); // Log data received
+      console.log("Fetched personnel data:", data);
       setPersonnel(data);
     }
     setLoading(false);
@@ -47,21 +51,20 @@ const PersonnelList = () => {
   }, []);
 
   const handleDeletePersonnel = async (id: string, name: string) => {
+    if (!isAdmin) { // Tambahkan cek isAdmin
+      toast.error("Anda tidak memiliki izin untuk menghapus personel.");
+      return;
+    }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        // Gunakan supabaseAdmin untuk menghapus pengguna dari auth.users
         const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
 
         if (authError) {
           throw authError;
         }
 
-        // Trigger `handle_new_user` akan menangani penghapusan dari tabel `profiles`
-        // karena adanya `ON DELETE CASCADE` pada foreign key.
-        // Jadi, tidak perlu penghapusan eksplisit dari 'profiles' di sini.
-
         toast.success(`Personel "${name}" berhasil dihapus.`);
-        fetchPersonnel(); // Refresh the list after deletion
+        fetchPersonnel();
       } catch (error: any) {
         toast.error(`Gagal menghapus personel: ${error.message}`);
         console.error("Error deleting personnel:", error);
@@ -70,6 +73,10 @@ const PersonnelList = () => {
   };
 
   const handleEditPersonnel = (person: Profile) => {
+    if (!isAdmin) { // Tambahkan cek isAdmin
+      toast.error("Anda tidak memiliki izin untuk mengedit personel.");
+      return;
+    }
     setSelectedPersonnel(person);
     setIsEditModalOpen(true);
   };
@@ -97,7 +104,7 @@ const PersonnelList = () => {
             <TableHead>Nama Belakang</TableHead>
             <TableHead>Nomor ID</TableHead>
             <TableHead>Peran</TableHead>
-            <TableHead className="text-right">Aksi</TableHead> {/* New column for actions */}
+            {isAdmin && <TableHead className="text-right">Aksi</TableHead>} {/* Hanya tampilkan kolom Aksi jika admin */}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -107,23 +114,25 @@ const PersonnelList = () => {
               <TableCell>{p.last_name}</TableCell>
               <TableCell>{p.id_number || '-'}</TableCell>
               <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEditPersonnel(p)}
-                  className="mr-2"
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
-                >
-                  Hapus
-                </Button>
-              </TableCell>
+              {isAdmin && ( // Hanya tampilkan tombol jika admin
+                <TableCell className="text-right">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditPersonnel(p)}
+                    className="mr-2"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
+                  >
+                    Hapus
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
