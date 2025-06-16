@@ -73,7 +73,7 @@ const Navbar = () => {
                 <Link to="/admin" className="hover:underline">Admin</Link>
               )}
               {isSatpam && ( // Tampilkan hanya untuk peran satpam
-                <Link to="/satpam-dashboard" className="hover:underline">Laporan Cek Area</Link>
+                <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
               )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
                 Logout
