@@ -26,9 +26,14 @@ const AdminDashboard = () => {
           .single();
 
         if (error) {
-          console.error("Error fetching profile role:", error);
-          toast.error("Gagal memuat peran pengguna.");
-          navigate('/'); // Redirect if role cannot be fetched
+          if (error.code === 'PGRST204') { // No rows found
+            console.warn("No profile found for user, redirecting from Admin Dashboard.");
+            toast.error("Akses ditolak. Profil tidak ditemukan atau Anda bukan admin.");
+          } else {
+            console.error("Error fetching profile role:", error);
+            toast.error("Gagal memuat peran pengguna.");
+          }
+          navigate('/'); // Redirect in case of error or no profile
         } else if (data?.role === 'admin') {
           setIsAdmin(true);
         } else {
