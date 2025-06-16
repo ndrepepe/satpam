@@ -25,6 +25,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const [profileLoading, setProfileLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileFormValues & { role?: string } | null>(null);
+  const [isSatpam, setIsSatpam] = useState(false); // State baru untuk peran satpam
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -61,6 +62,11 @@ const Profile = () => {
         if (data) {
           setProfile(data);
           form.reset(data); // Set form default values
+          if (data.role === 'satpam') {
+            setIsSatpam(true);
+          } else {
+            setIsSatpam(false);
+          }
         } else {
           // No profile found, attempt to create one
           console.log("No profile found for user, attempting to create one.");
@@ -91,6 +97,11 @@ const Profile = () => {
             } else if (newData) {
               setProfile(newData);
               form.reset(newData);
+              if (newData.role === 'satpam') {
+                setIsSatpam(true);
+              } else {
+                setIsSatpam(false);
+              }
             }
           }
         }
@@ -106,6 +117,10 @@ const Profile = () => {
   const onSubmit = async (values: ProfileFormValues) => {
     if (!session?.user) {
       toast.error("Anda harus login untuk memperbarui profil.");
+      return;
+    }
+    if (isSatpam) {
+      toast.error("Pengguna dengan peran 'satpam' tidak diizinkan untuk memperbarui profil.");
       return;
     }
 
@@ -157,7 +172,7 @@ const Profile = () => {
                   <FormItem>
                     <FormLabel>Nama Depan</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nama Depan" {...field} />
+                      <Input placeholder="Nama Depan" {...field} disabled={isSatpam} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -170,7 +185,7 @@ const Profile = () => {
                   <FormItem>
                     <FormLabel>Nama Belakang</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nama Belakang" {...field} />
+                      <Input placeholder="Nama Belakang" {...field} disabled={isSatpam} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -183,7 +198,7 @@ const Profile = () => {
                   <FormItem>
                     <FormLabel>Nomor ID</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nomor ID" {...field} />
+                      <Input placeholder="Nomor ID" {...field} disabled={isSatpam} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -197,7 +212,12 @@ const Profile = () => {
                 <Label>Peran</Label>
                 <Input value={profile?.role || 'Tidak Diketahui'} disabled />
               </div>
-              <Button type="submit" className="w-full">Simpan Perubahan</Button>
+              {isSatpam && (
+                <p className="text-red-500 text-sm text-center">
+                  Anda tidak dapat mengubah profil karena peran Anda adalah 'satpam'.
+                </p>
+              )}
+              <Button type="submit" className="w-full" disabled={isSatpam}>Simpan Perubahan</Button>
             </form>
           </Form>
         </CardContent>
