@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseAdmin } from '@/integrations/supabase/client'; // Import supabaseAdmin
 import {
   Table,
   TableBody,
@@ -48,16 +48,16 @@ const PersonnelList = () => {
   const handleDeletePersonnel = async (id: string, name: string) => {
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        // First, delete the user from auth.users
-        const { error: authError } = await supabase.auth.admin.deleteUser(id);
+        // Gunakan supabaseAdmin untuk menghapus pengguna dari auth.users
+        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
 
         if (authError) {
           throw authError;
         }
 
-        // The trigger `handle_new_user` should handle deletion from `profiles` table
-        // due to `ON DELETE CASCADE` on the foreign key.
-        // So, no explicit delete from 'profiles' is needed here.
+        // Trigger `handle_new_user` akan menangani penghapusan dari tabel `profiles`
+        // karena adanya `ON DELETE CASCADE` pada foreign key.
+        // Jadi, tidak perlu penghapusan eksplisit dari 'profiles' di sini.
 
         toast.success(`Personel "${name}" berhasil dihapus.`);
         fetchPersonnel(); // Refresh the list after deletion
