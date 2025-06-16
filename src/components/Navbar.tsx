@@ -56,8 +56,9 @@ const Navbar = () => {
           throw error;
         }
       } else {
-        // Jika tidak ada error, logout berhasil. Navigasi akan ditangani oleh SessionContext
+        // Jika tidak ada error, logout berhasil. Navigasi secara eksplisit ke halaman login.
         toast.success("Berhasil logout!");
+        navigate('/login');
       }
     } catch (error: any) {
       toast.error(`Gagal logout: ${error.message}`);
