@@ -60,12 +60,12 @@ const PrintQRCode = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 bg-white print:p-0 print:m-0 print:shadow-none">
+    <div className="flex flex-col items-center justify-center p-8 bg-white print:p-0 print:m-0 print:shadow-none min-h-screen">
       <h1 className="text-2xl font-bold mb-4 print:hidden">QR Code untuk {locationName}</h1>
       <div className="p-4 border border-gray-300 rounded-lg shadow-md print:border-none print:shadow-none">
         <QrCode
           value={qrCodeValue}
-          size={256}
+          size={384} {/* Increased size by 0.5 times (256 * 1.5 = 384) */}
           level="H"
           id="qrcode-print-svg"
         />
@@ -77,7 +77,7 @@ const PrintQRCode = () => {
         Cetak QR Code
       </Button>
       <div className="hidden print:block text-center mt-8">
-        <p className="text-lg font-semibold">{locationName}</p>
+        <p className="text-lg font-semibold">CEK AREA</p> {/* Changed text to "CEK AREA" */}
       </div>
     </div>
   );
