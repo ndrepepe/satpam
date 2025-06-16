@@ -46,10 +46,19 @@ const Navbar = () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        throw error;
+        // Jika error adalah 'Auth session missing', anggap sebagai logout berhasil
+        if (error.message === 'Auth session missing!') {
+          console.warn("Logout attempted but session was already missing. Navigating to login.");
+          toast.success("Anda telah berhasil logout.");
+          navigate('/login'); // Navigasi manual sebagai fallback
+        } else {
+          // Untuk error lainnya, lempar error agar ditangkap di blok catch
+          throw error;
+        }
+      } else {
+        // Jika tidak ada error, logout berhasil. Navigasi akan ditangani oleh SessionContext
+        toast.success("Berhasil logout!");
       }
-      toast.success("Berhasil logout!");
-      navigate('/login');
     } catch (error: any) {
       toast.error(`Gagal logout: ${error.message}`);
       console.error("Error logging out:", error);
@@ -67,7 +76,6 @@ const Navbar = () => {
         <div className="space-x-4">
           {session ? (
             <>
-              {/* Tautan Beranda dihapus */}
               <Link to="/profile" className="hover:underline">Profil</Link>
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
