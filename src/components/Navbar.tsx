@@ -9,9 +9,10 @@ const Navbar = () => {
   const { session, loading, user } = useSession();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSatpam, setIsSatpam] = useState(false); // State baru untuk peran satpam
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkUserRole = async () => {
       if (user) {
         const { data, error } = await supabase
           .from('profiles')
@@ -22,18 +23,22 @@ const Navbar = () => {
         if (error) {
           console.error("Error fetching user role for Navbar:", error);
           setIsAdmin(false);
-        } else if (data?.role === 'admin') {
-          setIsAdmin(true);
+          setIsSatpam(false);
+        } else if (data) {
+          setIsAdmin(data.role === 'admin');
+          setIsSatpam(data.role === 'satpam');
         } else {
           setIsAdmin(false);
+          setIsSatpam(false);
         }
       } else {
         setIsAdmin(false);
+        setIsSatpam(false);
       }
     };
 
     if (!loading) {
-      checkAdminStatus();
+      checkUserRole();
     }
   }, [user, loading]);
 
@@ -66,6 +71,9 @@ const Navbar = () => {
               <Link to="/profile" className="hover:underline">Profil</Link>
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
+              )}
+              {isSatpam && ( // Tampilkan hanya untuk peran satpam
+                <Link to="/scan-location" className="hover:underline">Laporan Cek Area</Link>
               )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
                 Logout

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 const ScanLocation = () => {
@@ -9,6 +10,7 @@ const ScanLocation = () => {
   const locationId = searchParams.get('id');
   const [locationName, setLocationName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchLocation = async () => {
@@ -36,6 +38,14 @@ const ScanLocation = () => {
     fetchLocation();
   }, [locationId]);
 
+  const handleContinueReport = () => {
+    if (locationId) {
+      navigate(`/check-area-report?locationId=${locationId}`);
+    } else {
+      toast.error("Tidak ada ID lokasi untuk melanjutkan laporan.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -54,16 +64,21 @@ const ScanLocation = () => {
         </CardHeader>
         <CardContent>
           {locationName && locationName !== "Lokasi Tidak Ditemukan" && locationName !== "ID Lokasi Tidak Disediakan" ? (
-            <p className="text-lg text-gray-700 dark:text-gray-300">
-              Anda telah berhasil memindai lokasi ini.
-            </p>
+            <>
+              <p className="text-lg text-gray-700 dark:text-gray-300">
+                Anda telah berhasil memindai lokasi ini.
+              </p>
+              <Button onClick={handleContinueReport} className="mt-6 w-full">
+                Lanjutkan Laporan
+              </Button>
+            </>
           ) : (
             <p className="text-lg text-red-500 dark:text-red-400">
               Terjadi kesalahan saat memuat detail lokasi.
             </p>
           )}
-          <Button onClick={() => window.history.back()} className="mt-6">
-            Kembali
+          <Button onClick={() => navigate('/')} variant="outline" className="mt-4 w-full">
+            Kembali ke Beranda
           </Button>
         </CardContent>
       </Card>

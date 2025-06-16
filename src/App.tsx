@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"; // Import useLocation
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/AdminDashboard";
 import ScanLocation from "./pages/ScanLocation";
 import PrintQRCode from "./pages/PrintQRCode";
+import CheckAreaReport from "./pages/CheckAreaReport"; // Import the new page
 import { SessionContextProvider } from "./integrations/supabase/SessionContext";
 import Navbar from "./components/Navbar";
 
@@ -22,7 +23,7 @@ const AppContent = () => {
   return (
     <SessionContextProvider>
       <div className="flex flex-col min-h-screen">
-        {!isPrintPage && <Navbar />} {/* Conditionally render Navbar */}
+        {!isPrintPage && <Navbar />}
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Index />} />
@@ -31,6 +32,7 @@ const AppContent = () => {
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/scan-location" element={<ScanLocation />} />
             <Route path="/print-qr/:id" element={<PrintQRCode />} />
+            <Route path="/check-area-report" element={<CheckAreaReport />} /> {/* New route */}
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -46,7 +48,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppContent /> {/* Render AppContent inside BrowserRouter */}
+        <AppContent />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
