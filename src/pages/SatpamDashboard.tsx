@@ -13,11 +13,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge'; // Import Badge component
 
 interface Location {
   id: string;
   name: string;
   qr_code_data: string;
+  created_at: string;
+  isCheckedToday?: boolean; // Menambahkan properti baru
+}
+
+interface CheckAreaReport {
+  location_id: string;
   created_at: string;
 }
 
@@ -53,18 +60,48 @@ const SatpamDashboard = () => {
 
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
+
         // Fetch locations
-        const { data, error } = await supabase
+        const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
           .select('id, name, qr_code_data, created_at')
           .order('name', { ascending: true });
 
-        if (error) {
-          console.error("Error fetching locations:", error);
+        if (locationsError) {
+          console.error("Error fetching locations:", locationsError);
           toast.error("Gagal memuat daftar lokasi.");
-        } else if (data) {
-          setLocations(data);
+          setLoadingLocations(false);
+          return;
         }
+
+        // Fetch today's reports for the current user
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to start of today
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1); // Set to start of tomorrow
+
+        const { data: reportsData, error: reportsError } = await supabase
+          .from('check_area_reports')
+          .select('location_id, created_at')
+          .eq('user_id', user.id)
+          .gte('created_at', today.toISOString())
+          .lt('created_at', tomorrow.toISOString());
+
+        if (reportsError) {
+          console.error("Error fetching reports:", reportsError);
+          toast.error("Gagal memuat laporan cek area.");
+          setLoadingLocations(false);
+          return;
+        }
+
+        const checkedLocationIds = new Set(reportsData?.map(report => report.location_id));
+
+        const locationsWithStatus = locationsData.map(loc => ({
+          ...loc,
+          isCheckedToday: checkedLocationIds.has(loc.id),
+        }));
+
+        setLocations(locationsWithStatus);
         setLoadingLocations(false);
       } else {
         toast.error("Akses ditolak. Anda bukan satpam.");
@@ -106,6 +143,7 @@ const SatpamDashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nama Lokasi</TableHead>
+                  <TableHead>Status Cek Hari Ini</TableHead> {/* Kolom baru */}
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -113,12 +151,20 @@ const SatpamDashboard = () => {
                 {locations.map((loc) => (
                   <TableRow key={loc.id}>
                     <TableCell className="font-medium">{loc.name}</TableCell>
+                    <TableCell>
+                      {loc.isCheckedToday ? (
+                        <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
+                      ) : (
+                        <Badge variant="destructive">Belum Dicek</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         size="sm"
                         onClick={() => handleScanLocation(loc.id)}
+                        disabled={loc.isCheckedToday} // Nonaktifkan tombol jika sudah dicek
                       >
-                        Pindai Lokasi
+                        {loc.isCheckedToday ? "Sudah Dicek" : "Pindai Lokasi"}
                       </Button>
                     </TableCell>
                   </TableRow>
