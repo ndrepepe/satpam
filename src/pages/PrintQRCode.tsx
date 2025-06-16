@@ -61,9 +61,9 @@ const PrintQRCode = () => {
 
   return (
     <div className="flex flex-col items-center justify-center p-8 bg-white print:p-0 print:m-0 print:shadow-none min-h-screen">
-      {/* Teks "CEK AREA" dipindahkan ke atas QR Code */}
+      {/* Teks "CEK AREA" dipindahkan ke atas QR Code dan diperbesar */}
       <div className="hidden print:block text-center mb-4">
-        <p className="text-lg font-semibold">CEK AREA</p>
+        <p className="text-2xl font-semibold">CEK AREA</p>
       </div>
 
       <div className="p-4 border border-gray-300 rounded-lg shadow-md print:border-none print:shadow-none">
@@ -75,10 +75,10 @@ const PrintQRCode = () => {
         />
       </div>
 
-      {/* Nama lokasi ditambahkan di bawah QR Code */}
+      {/* Nama lokasi ditambahkan di bawah QR Code dan diperbesar */}
       {locationName && (
         <div className="hidden print:block text-center mt-4">
-          <p className="text-lg font-semibold">{locationName}</p>
+          <p className="text-2xl font-semibold">{locationName}</p>
         </div>
       )}
 
