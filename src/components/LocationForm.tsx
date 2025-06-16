@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { QRCode } from 'qrcode.react'; // Mengubah ke named import
+import QrCode from 'react-qr-code'; // Menggunakan named import dari react-qr-code
 import { v4 as uuidv4 } from 'uuid';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -56,15 +56,29 @@ const LocationForm = () => {
 
   const downloadQRCode = () => {
     if (qrCodeValue && locationName) {
-      const canvas = document.getElementById('qrcode-canvas') as HTMLCanvasElement;
-      if (canvas) {
-        const pngUrl = canvas.toDataURL('image/png');
-        const downloadLink = document.createElement('a');
-        downloadLink.href = pngUrl;
-        downloadLink.download = `QR_Code_${locationName.replace(/\s/g, '_')}.png`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+      // react-qr-code renders an SVG, so we need to convert it to canvas for PNG download
+      const svgElement = document.querySelector('#qrcode-svg');
+      if (svgElement) {
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx?.drawImage(img, 0, 0);
+
+          const pngUrl = canvas.toDataURL('image/png');
+          const downloadLink = document.createElement('a');
+          downloadLink.href = pngUrl;
+          downloadLink.download = `QR_Code_${locationName.replace(/\s/g, '_')}.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+        };
+
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
       }
     }
   };
@@ -94,12 +108,11 @@ const LocationForm = () => {
             <CardTitle>QR Code untuk {locationName}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center">
-            <QRCode
-              id="qrcode-canvas"
+            <QrCode // Menggunakan QrCode dari react-qr-code
               value={qrCodeValue}
               size={256}
               level="H"
-              includeMargin={true}
+              id="qrcode-svg" // ID untuk SVG, bukan canvas
               className="mb-4"
             />
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 break-all">

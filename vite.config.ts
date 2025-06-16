@@ -15,6 +15,6 @@ export default defineConfig(() => ({
     },
   },
   optimizeDeps: {
-    exclude: ['qrcode.react'], // Mengecualikan qrcode.react dari pre-bundling Vite
+    exclude: [], // Menghapus qrcode.react dari exclude
   },
 }));
