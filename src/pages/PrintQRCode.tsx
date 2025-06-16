@@ -65,7 +65,7 @@ const PrintQRCode = () => {
       <div className="p-4 border border-gray-300 rounded-lg shadow-md print:border-none print:shadow-none">
         <QrCode
           value={qrCodeValue}
-          size={384} {/* Increased size by 0.5 times (256 * 1.5 = 384) */}
+          size={384}
           level="H"
           id="qrcode-print-svg"
         />
@@ -77,7 +77,7 @@ const PrintQRCode = () => {
         Cetak QR Code
       </Button>
       <div className="hidden print:block text-center mt-8">
-        <p className="text-lg font-semibold">CEK AREA</p> {/* Changed text to "CEK AREA" */}
+        <p className="text-lg font-semibold">CEK AREA</p>
       </div>
     </div>
   );
