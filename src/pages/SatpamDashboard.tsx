@@ -74,18 +74,37 @@ const SatpamDashboard = () => {
           return;
         }
 
-        // Fetch today's reports for the current user
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Set to start of today
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1); // Set to start of tomorrow
+        // Calculate the "checking day" based on 06:00 AM GMT+7
+        const now = new Date();
+        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
 
+        // Get the current date in GMT+7
+        // This is a simplified way to get the "current day" relative to GMT+7
+        // For more robust timezone handling, consider a library like `date-fns-tz`
+        const currentGMT7Date = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
+
+        let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
+
+        // If the current GMT+7 time is before 06:00 AM GMT+7,
+        // then the "checking day" actually started at 06:00 AM GMT+7 on the *previous* calendar day.
+        if (currentGMT7Date.getHours() < 6) {
+          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
+        }
+
+        // Convert startOfCheckingDayGMT7 to UTC for the Supabase query
+        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
+
+        // The end of the checking day is 24 hours after its start
+        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+
+        // Fetch reports for the current user within the defined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, created_at')
           .eq('user_id', user.id)
-          .gte('created_at', today.toISOString())
-          .lt('created_at', tomorrow.toISOString());
+          .gte('created_at', startOfCheckingDayUTC.toISOString())
+          .lt('created_at', endOfCheckingDayUTC.toISOString());
 
         if (reportsError) {
           console.error("Error fetching reports:", reportsError);
