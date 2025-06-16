@@ -18,13 +18,14 @@ interface Profile {
   last_name: string;
   id_number?: string | null;
   role?: string;
+  email?: string; // Menambahkan properti email
 }
 
 interface PersonnelListProps {
-  isAdmin: boolean; // Menambahkan prop isAdmin
+  isAdmin: boolean;
 }
 
-const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Menerima prop isAdmin
+const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
   const [personnel, setPersonnel] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -32,16 +33,39 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Meneri
 
   const fetchPersonnel = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    // Mengambil data email dari auth.users melalui join atau dengan mengambil user_metadata
+    // Supabase RLS pada public.profiles tidak mengizinkan akses ke email secara langsung
+    // Kita perlu mengambil email dari auth.users secara terpisah atau melalui fungsi admin
+    // Untuk tujuan tampilan di admin dashboard, kita bisa mencoba mengambil dari auth.users
+    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+
+    if (usersError) {
+      console.error("Error fetching users for personnel list:", usersError);
+      toast.error("Gagal memuat daftar personel (data pengguna).");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, id_number, role');
 
-    if (error) {
-      console.error("Error fetching personnel:", error);
-      toast.error("Gagal memuat daftar personel.");
-    } else if (data) {
-      console.log("Fetched personnel data:", data);
-      setPersonnel(data);
+    if (profilesError) {
+      console.error("Error fetching profiles:", profilesError);
+      toast.error("Gagal memuat daftar personel (data profil).");
+      setLoading(false);
+      return;
+    }
+
+    if (profilesData && usersData) {
+      const combinedPersonnel = profilesData.map(profile => {
+        const user = usersData.users.find(u => u.id === profile.id);
+        return {
+          ...profile,
+          email: user?.email || 'N/A', // Menambahkan email dari data pengguna
+        };
+      });
+      setPersonnel(combinedPersonnel);
     }
     setLoading(false);
   };
@@ -51,7 +75,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Meneri
   }, []);
 
   const handleDeletePersonnel = async (id: string, name: string) => {
-    if (!isAdmin) { // Tambahkan cek isAdmin
+    if (!isAdmin) {
       toast.error("Anda tidak memiliki izin untuk menghapus personel.");
       return;
     }
@@ -73,7 +97,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Meneri
   };
 
   const handleEditPersonnel = (person: Profile) => {
-    if (!isAdmin) { // Tambahkan cek isAdmin
+    if (!isAdmin) {
       toast.error("Anda tidak memiliki izin untuk mengedit personel.");
       return;
     }
@@ -103,8 +127,9 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Meneri
             <TableHead>Nama Depan</TableHead>
             <TableHead>Nama Belakang</TableHead>
             <TableHead>Nomor ID</TableHead>
+            <TableHead>Email</TableHead> {/* Kolom baru untuk Email */}
             <TableHead>Peran</TableHead>
-            {isAdmin && <TableHead className="text-right">Aksi</TableHead>} {/* Hanya tampilkan kolom Aksi jika admin */}
+            {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -113,8 +138,9 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => { // Meneri
               <TableCell className="font-medium">{p.first_name}</TableCell>
               <TableCell>{p.last_name}</TableCell>
               <TableCell>{p.id_number || '-'}</TableCell>
+              <TableCell>{p.email || '-'}</TableCell> {/* Menampilkan Email */}
               <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
-              {isAdmin && ( // Hanya tampilkan tombol jika admin
+              {isAdmin && (
                 <TableCell className="text-right">
                   <Button
                     variant="outline"
