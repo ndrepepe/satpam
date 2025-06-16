@@ -8,8 +8,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button'; // Import Button component
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import EditLocationModal from './EditLocationModal'; // Import the new modal component
 
 interface Location {
   id: string;
@@ -21,6 +22,8 @@ interface Location {
 const LocationList = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{ id: string; name: string } | null>(null);
 
   const fetchLocations = async () => {
     setLoading(true);
@@ -62,18 +65,15 @@ const LocationList = () => {
     }
   };
 
-  const handleEditLocation = (id: string, name: string) => {
-    toast.info(`Fungsionalitas edit untuk lokasi "${name}" (ID: ${id}) akan segera hadir!`);
-    // Implement actual edit logic here (e.g., open a modal with a form)
+  const handleEditLocation = (location: { id: string; name: string }) => {
+    setSelectedLocation(location);
+    setIsEditModalOpen(true);
   };
 
-  if (loading) {
-    return <p className="text-center text-gray-600 dark:text-gray-400">Memuat daftar lokasi...</p>;
-  }
-
-  if (locations.length === 0) {
-    return <p className="text-center text-gray-600 dark:text-gray-400">Belum ada lokasi yang terdaftar.</p>;
-  }
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedLocation(null);
+  };
 
   return (
     <div className="mt-6">
@@ -84,7 +84,7 @@ const LocationList = () => {
             <TableHead>Nama Lokasi</TableHead>
             <TableHead>Data QR Code</TableHead>
             <TableHead>Dibuat Pada</TableHead>
-            <TableHead className="text-right">Aksi</TableHead> {/* New column for actions */}
+            <TableHead className="text-right">Aksi</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -106,7 +106,7 @@ const LocationList = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => handleEditLocation(loc.id, loc.name)}
+                  onClick={() => handleEditLocation({ id: loc.id, name: loc.name })}
                   className="mr-2"
                 >
                   Edit
@@ -123,6 +123,15 @@ const LocationList = () => {
           ))}
         </TableBody>
       </Table>
+
+      {selectedLocation && (
+        <EditLocationModal
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEditModal}
+          location={selectedLocation}
+          onLocationUpdated={fetchLocations} // Pass the fetch function to refresh the list
+        />
+      )}
     </div>
   );
 };
