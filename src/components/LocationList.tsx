@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import EditLocationModal from './EditLocationModal'; // Import the new modal component
+import EditLocationModal from './EditLocationModal';
 
 interface Location {
   id: string;
@@ -75,6 +75,11 @@ const LocationList = () => {
     setSelectedLocation(null);
   };
 
+  const handlePrintQrCode = (locationId: string) => {
+    // Open the print page in a new window/tab
+    window.open(`/print-qr/${locationId}`, '_blank', 'width=600,height=700,resizable=yes,scrollbars=yes');
+  };
+
   return (
     <div className="mt-6">
       <h3 className="text-xl font-semibold mb-4">Daftar Lokasi</h3>
@@ -82,7 +87,7 @@ const LocationList = () => {
         <TableHeader>
           <TableRow>
             <TableHead>Nama Lokasi</TableHead>
-            <TableHead>Data QR Code</TableHead>
+            <TableHead>QR Code</TableHead> {/* Changed column header */}
             <TableHead>Dibuat Pada</TableHead>
             <TableHead className="text-right">Aksi</TableHead>
           </TableRow>
@@ -92,28 +97,28 @@ const LocationList = () => {
             <TableRow key={loc.id}>
               <TableCell className="font-medium">{loc.name}</TableCell>
               <TableCell>
-                <a 
-                  href={loc.qr_code_data} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-blue-500 hover:underline break-all"
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => handlePrintQrCode(loc.id)}
+                  className="p-0 h-auto text-blue-500 hover:underline"
                 >
-                  {loc.qr_code_data}
-                </a>
+                  Lihat/Cetak QR
+                </Button>
               </TableCell>
               <TableCell>{new Date(loc.created_at).toLocaleString()}</TableCell>
               <TableCell className="text-right">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => handleEditLocation({ id: loc.id, name: loc.name })}
                   className="mr-2"
                 >
                   Edit
                 </Button>
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={() => handleDeleteLocation(loc.id, loc.name)}
                 >
                   Hapus
@@ -129,7 +134,7 @@ const LocationList = () => {
           isOpen={isEditModalOpen}
           onClose={handleCloseEditModal}
           location={selectedLocation}
-          onLocationUpdated={fetchLocations} // Pass the fetch function to refresh the list
+          onLocationUpdated={fetchLocations}
         />
       )}
     </div>

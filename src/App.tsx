@@ -8,7 +8,8 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/AdminDashboard";
-import ScanLocation from "./pages/ScanLocation"; // Import ScanLocation
+import ScanLocation from "./pages/ScanLocation";
+import PrintQRCode from "./pages/PrintQRCode"; // Import PrintQRCode
 import { SessionContextProvider } from "./integrations/supabase/SessionContext";
 import Navbar from "./components/Navbar";
 
@@ -29,7 +30,8 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/scan-location" element={<ScanLocation />} /> {/* Add ScanLocation route */}
+                <Route path="/scan-location" element={<ScanLocation />} />
+                <Route path="/print-qr/:id" element={<PrintQRCode />} /> {/* Add PrintQRCode route */}
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
