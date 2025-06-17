@@ -42,12 +42,12 @@ const Login = () => {
           }}
           theme="light"
           redirectTo={window.location.origin}
-          view="sign_in" // Menambahkan ini untuk memastikan tampilan selalu sign_in
+          view="sign_in"
           localization={{
             variables: {
               sign_in: {
                 link_text: {
-                  no_account: '', // Mengatur teks ini menjadi kosong
+                  no_account: null, // Mengatur teks ini menjadi null untuk menyembunyikan
                 },
               },
             },
