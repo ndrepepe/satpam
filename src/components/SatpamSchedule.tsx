@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface SatpamProfile {
@@ -64,10 +63,11 @@ const SatpamSchedule: React.FC = () => {
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
-  // State for Edit Dialog
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  const [editingFullName, setEditingFullName] = useState(''); // Combined full name
+  // State for Reassign Dialog
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [originalUserId, setOriginalUserId] = useState<string | null>(null);
+  const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
+  const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -229,48 +229,48 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const handleEditProfileClick = (userId: string) => {
-    const profileToEdit = satpamList.find(satpam => satpam.id === userId);
-    if (profileToEdit) {
-      setEditingProfileId(profileToEdit.id);
-      setEditingFullName(`${profileToEdit.first_name || ''} ${profileToEdit.last_name || ''}`.trim());
-      setIsEditDialogOpen(true);
-    } else {
-      toast.error("Profil satpam tidak ditemukan.");
-    }
+  const handleEditScheduleAssignmentClick = (userId: string, scheduleDate: string) => {
+    setOriginalUserId(userId);
+    setOriginalScheduleDate(scheduleDate);
+    setNewSelectedSatpamId(userId); // Pre-select current satpam in dropdown
+    setIsReassignDialogOpen(true);
   };
 
-  const handleSaveProfileChanges = async () => {
-    if (!editingProfileId || !editingFullName.trim()) {
-      toast.error("Nama lengkap tidak boleh kosong.");
+  const handleSaveScheduleAssignment = async () => {
+    if (!originalUserId || !originalScheduleDate || !newSelectedSatpamId) {
+      toast.error("Data tidak lengkap untuk mengubah penugasan.");
+      return;
+    }
+
+    if (originalUserId === newSelectedSatpamId) {
+      toast.info("Personel yang dipilih sama dengan personel saat ini. Tidak ada perubahan yang disimpan.");
+      setIsReassignDialogOpen(false);
       return;
     }
 
     setLoading(true);
     try {
-      const nameParts = editingFullName.trim().split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' '); // Join remaining parts as last name
-
+      // Update all schedule entries for the original user on the original date
       const { error } = await supabase
-        .from('profiles')
-        .update({ first_name: firstName, last_name: lastName || null }) // Set to null if last name is empty
-        .eq('id', editingProfileId);
+        .from('schedules')
+        .update({ user_id: newSelectedSatpamId })
+        .eq('user_id', originalUserId)
+        .eq('schedule_date', originalScheduleDate);
 
       if (error) throw error;
 
-      toast.success("Nama personel berhasil diperbarui.");
-      setIsEditDialogOpen(false);
-      setEditingProfileId(null);
-      setEditingFullName('');
+      toast.success("Penugasan personel berhasil diperbarui.");
+      setIsReassignDialogOpen(false);
+      setOriginalUserId(null);
+      setOriginalScheduleDate(null);
+      setNewSelectedSatpamId(undefined);
       
-      await fetchInitialData(); // Re-fetch satpam list to update names in dropdown
       if (selectedDate) {
-        await fetchSchedules(selectedDate); // Re-fetch schedules to update names in table
+        await fetchSchedules(selectedDate); // Re-fetch schedules to update the table
       }
     } catch (error: any) {
-      toast.error(`Gagal memperbarui nama personel: ${error.message}`);
-      console.error("Error updating profile:", error);
+      toast.error(`Gagal memperbarui penugasan personel: ${error.message}`);
+      console.error("Error updating schedule assignment:", error);
     } finally {
       setLoading(false);
     }
@@ -359,7 +359,7 @@ const SatpamSchedule: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEditProfileClick(schedule.user_id)}
+                          onClick={() => handleEditScheduleAssignmentClick(schedule.user_id, schedule.schedule_date)}
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -382,30 +382,36 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Edit Profile Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      {/* Reassign Personel Dialog */}
+      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Edit Nama Personel</DialogTitle>
+            <DialogTitle>Ubah Penugasan Personel</DialogTitle>
             <DialogDescription>
-              Ubah nama lengkap personel di sini. Klik simpan saat Anda selesai.
+              Pilih personel satpam baru untuk jadwal ini.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="fullName" className="text-right">
-                Nama Lengkap
+              <Label htmlFor="newSatpam" className="text-right">
+                Personel Baru
               </Label>
-              <Input
-                id="fullName"
-                value={editingFullName}
-                onChange={(e) => setEditingFullName(e.target.value)}
-                className="col-span-3"
-              />
+              <Select onValueChange={setNewSelectedSatpamId} value={newSelectedSatpamId} disabled={loading}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Pilih Satpam Baru" />
+                </SelectTrigger>
+                <SelectContent>
+                  {satpamList.map((satpam) => (
+                    <SelectItem key={satpam.id} value={satpam.id}>
+                      {satpam.first_name} {satpam.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleSaveProfileChanges} disabled={loading}>
+            <Button onClick={handleSaveScheduleAssignment} disabled={loading}>
               {loading ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
           </DialogFooter>
