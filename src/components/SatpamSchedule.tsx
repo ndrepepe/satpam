@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, Trash2, Edit, Upload } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input'; // Import Input component
+import { Input } from '@/components/ui/input';
 import * as XLSX from 'xlsx'; // Import xlsx
 
 interface SatpamProfile {
@@ -407,6 +407,19 @@ const SatpamSchedule: React.FC = () => {
     reader.readAsArrayBuffer(file);
   };
 
+  const handleDownloadTemplate = () => {
+    const ws_data = [
+      ["Tanggal", "Nama Satpam"], // Headers
+      ["2023-10-26", "Budi Santoso"],
+      ["2023-10-27", "Siti Aminah"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Jadwal_Template");
+    XLSX.writeFile(wb, "jadwal_template.xlsx");
+    toast.info("Format file XLSX berhasil diunduh.");
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -470,7 +483,7 @@ const SatpamSchedule: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Unggah file XLSX Anda. Pastikan file memiliki kolom 'Tanggal' (misal: YYYY-MM-DD) dan 'Nama Satpam' (nama lengkap personel).
           </p>
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <Input
               id="xlsx-file-upload"
               type="file"
@@ -482,8 +495,17 @@ const SatpamSchedule: React.FC = () => {
             <Button
               onClick={() => document.getElementById('xlsx-file-upload')?.click()}
               disabled={loading}
+              className="w-full sm:w-auto"
             >
               <Upload className="mr-2 h-4 w-4" /> Unggah & Proses
+            </Button>
+            <Button
+              onClick={handleDownloadTemplate}
+              disabled={loading}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <Download className="mr-2 h-4 w-4" /> Unduh Format
             </Button>
           </div>
         </CardContent>
