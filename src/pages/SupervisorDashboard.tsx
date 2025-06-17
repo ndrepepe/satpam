@@ -15,8 +15,12 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale'; // Import locale for Indonesian date formatting
-import { Badge } from '@/components/ui/badge'; // Import Badge component
+import { id } from 'date-fns/locale';
+import { Badge } from '@/components/ui/badge';
+import { Calendar as CalendarIcon } from 'lucide-react'; // Import CalendarIcon
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Import Popover components
+import { Calendar } from '@/components/ui/calendar'; // Import Calendar component
+import { cn } from '@/lib/utils'; // Import cn utility
 
 interface LocationWithStatus {
   id: string;
@@ -37,6 +41,7 @@ const SupervisorDashboard = () => {
   const [loadingReports, setLoadingReports] = useState(true);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date()); // State untuk tanggal yang dipilih
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -77,23 +82,31 @@ const SupervisorDashboard = () => {
           return;
         }
 
-        // 2. Calculate the "checking day" based on 06:00 AM GMT+7
-        const now = new Date();
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
-
-        const currentGMT7Date = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
-
-        let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
-
-        if (currentGMT7Date.getHours() < 6) {
-          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
+        // 2. Calculate the "checking day" based on 06:00 AM GMT+7 for the selected date
+        if (!selectedDate) {
+          setLoadingReports(false);
+          setLocationsWithStatus([]);
+          return;
         }
 
+        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
+
+        let startOfCheckingDayGMT7 = new Date(selectedDate);
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7 of the selected date
+
+        // If the selected date's time is before 06:00 AM GMT+7,
+        // then the "checking day" actually started at 06:00 AM GMT+7 on the *previous* calendar day.
+        // This logic is for the *current* time relative to the selected date, not the selected date itself.
+        // For filtering, we just need the 06:00 AM of the selected date.
+        // The previous logic was for SatpamDashboard to determine "today's" check based on current time.
+        // For Supervisor, we want reports *for* the selected date, starting 06:00 AM.
+
+        // Convert startOfCheckingDayGMT7 to UTC for the Supabase query
         const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
+        // The end of the checking day is 24 hours after its start
         const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
 
-        // 3. Fetch reports for the current "checking day"
+        // 3. Fetch reports for the selected "checking day"
         const { data: reportsTodayData, error: reportsTodayError } = await supabase
           .from('check_area_reports')
           .select(`
@@ -108,8 +121,8 @@ const SupervisorDashboard = () => {
           .order('created_at', { ascending: false }); // Order to get the latest report if multiple
 
         if (reportsTodayError) {
-          console.error("Error fetching reports for today:", reportsTodayError);
-          toast.error(`Gagal memuat laporan hari ini: ${reportsTodayError.message}`);
+          console.error("Error fetching reports for selected date:", reportsTodayError);
+          toast.error(`Gagal memuat laporan untuk tanggal ini: ${reportsTodayError.message}`);
           setLoadingReports(false);
           return;
         }
@@ -147,7 +160,7 @@ const SupervisorDashboard = () => {
     };
 
     checkUserRoleAndFetchReports();
-  }, [session, sessionLoading, user, navigate]);
+  }, [session, sessionLoading, user, navigate, selectedDate]); // Tambahkan selectedDate sebagai dependensi
 
   const handleViewPhoto = (url: string) => {
     setSelectedPhotoUrl(url);
@@ -178,7 +191,31 @@ const SupervisorDashboard = () => {
           <CardTitle className="text-center">Dashboard Atasan</CardTitle>
         </CardHeader>
         <CardContent>
-          <h3 className="text-xl font-semibold mb-4">Daftar Laporan Cek Area</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">Daftar Laporan Cek Area</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-[240px] justify-start text-left font-normal",
+                    !selectedDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : <span>Pilih tanggal</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
           {locationsWithStatus.length === 0 ? (
             <p className="text-center text-gray-600 dark:text-gray-400">Belum ada lokasi yang terdaftar.</p>
           ) : (
@@ -186,7 +223,7 @@ const SupervisorDashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nama Lokasi</TableHead>
-                  <TableHead>Status Cek Hari Ini</TableHead>
+                  <TableHead>Status Cek {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'Hari Ini'}</TableHead>
                   <TableHead>Dilaporkan Oleh</TableHead>
                   <TableHead>Waktu Laporan Terakhir</TableHead>
                   <TableHead>Foto</TableHead>
