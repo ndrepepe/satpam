@@ -11,6 +11,7 @@ import ScanLocation from "./pages/ScanLocation";
 import PrintQRCode from "./pages/PrintQRCode";
 import CheckAreaReport from "./pages/CheckAreaReport";
 import SatpamDashboard from "./pages/SatpamDashboard";
+import SupervisorDashboard from "./pages/SupervisorDashboard"; // Import SupervisorDashboard
 import { SessionContextProvider } from "./integrations/supabase/SessionContext";
 import Navbar from "./components/Navbar";
 
@@ -31,6 +32,7 @@ const AppContent = () => {
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/satpam-dashboard" element={<SatpamDashboard />} />
+            <Route path="/supervisor" element={<SupervisorDashboard />} /> {/* Rute baru */}
             <Route path="/scan-location" element={<ScanLocation />} />
             <Route path="/print-qr/:id" element={<PrintQRCode />} />
             <Route path="/check-area-report" element={<CheckAreaReport />} />

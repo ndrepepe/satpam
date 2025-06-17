@@ -10,6 +10,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSatpam, setIsSatpam] = useState(false);
+  const [isSupervisor, setIsSupervisor] = useState(false); // State baru untuk atasan
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -24,16 +25,20 @@ const Navbar = () => {
           console.error("Error fetching user role for Navbar:", error);
           setIsAdmin(false);
           setIsSatpam(false);
+          setIsSupervisor(false);
         } else if (data) {
           setIsAdmin(data.role === 'admin');
           setIsSatpam(data.role === 'satpam');
+          setIsSupervisor(data.role === 'atasan'); // Set state isSupervisor
         } else {
           setIsAdmin(false);
           setIsSatpam(false);
+          setIsSupervisor(false);
         }
       } else {
         setIsAdmin(false);
         setIsSatpam(false);
+        setIsSupervisor(false);
       }
     };
 
@@ -46,17 +51,13 @@ const Navbar = () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        // Jika error adalah 'Auth session missing', anggap sebagai logout berhasil
         if (error.message === 'Auth session missing!') {
           console.warn("Logout attempted but session was already missing. SessionContext should handle navigation.");
           toast.success("Anda telah berhasil logout.");
-          // Tidak perlu navigate('/login') di sini, biarkan SessionContext yang menangani
         } else {
-          // Untuk error lainnya, lempar error agar ditangkap di blok catch
           throw error;
         }
       } else {
-        // Jika tidak ada error, logout berhasil. Navigasi akan ditangani oleh SessionContext
         toast.success("Berhasil logout!");
       }
     } catch (error: any) {
@@ -82,6 +83,9 @@ const Navbar = () => {
               )}
               {isSatpam && (
                 <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
+              )}
+              {isSupervisor && ( // Tautan baru untuk atasan
+                <Link to="/supervisor" className="hover:underline">Laporan</Link>
               )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
                 Logout
