@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, Trash2, Edit } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Edit, Upload } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import * as XLSX from 'xlsx'; // Import xlsx
 
 interface SatpamProfile {
   id: string;
@@ -69,6 +70,9 @@ const SatpamSchedule: React.FC = () => {
   const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
 
+  // Maps for quick lookup during XLSX processing
+  const [satpamNameMap, setSatpamNameMap] = useState<Map<string, string>>(new Map()); // Full name -> ID
+
   const fetchInitialData = async () => {
     setLoading(true);
     try {
@@ -79,6 +83,11 @@ const SatpamSchedule: React.FC = () => {
 
       if (satpamError) throw satpamError;
       setSatpamList(satpamData);
+      const newSatpamMap = new Map<string, string>();
+      satpamData.forEach(s => {
+        newSatpamMap.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
+      });
+      setSatpamNameMap(newSatpamMap);
 
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
@@ -295,6 +304,108 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      toast.error("Tidak ada file yang dipilih.");
+      return;
+    }
+
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        if (json.length === 0) {
+          toast.error("File XLSX kosong atau tidak memiliki data.");
+          setLoading(false);
+          return;
+        }
+
+        const schedulesToProcess: { date: string; userId: string }[] = [];
+        let hasError = false;
+
+        for (const row of json as any[]) {
+          const rawDate = row['Tanggal']; // Assuming 'Tanggal' column
+          const satpamFullName = row['Nama Satpam']; // Assuming 'Nama Satpam' column
+
+          if (!rawDate || !satpamFullName) {
+            toast.error("File XLSX harus memiliki kolom 'Tanggal' dan 'Nama Satpam'.");
+            hasError = true;
+            break;
+          }
+
+          // Date parsing: handle various formats, assuming Excel date number or string
+          let formattedDate: string;
+          if (typeof rawDate === 'number') {
+            // Excel date number (days since 1900-01-01)
+            const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Excel's epoch is Dec 30, 1899
+            const dateObj = new Date(excelEpoch.getTime() + rawDate * 24 * 60 * 60 * 1000);
+            formattedDate = format(dateObj, 'yyyy-MM-dd');
+          } else {
+            // Assume string format like YYYY-MM-DD or DD-MM-YYYY
+            try {
+              formattedDate = format(new Date(rawDate), 'yyyy-MM-dd');
+            } catch (dateError) {
+              toast.error(`Format tanggal tidak valid: ${rawDate}. Gunakan YYYY-MM-DD.`);
+              hasError = true;
+              break;
+            }
+          }
+
+          const userId = satpamNameMap.get(satpamFullName.trim());
+
+          if (!userId) {
+            toast.error(`Personel "${satpamFullName}" tidak ditemukan di daftar satpam.`);
+            hasError = true;
+            break;
+          }
+
+          schedulesToProcess.push({ date: formattedDate, userId });
+        }
+
+        if (hasError) {
+          setLoading(false);
+          return;
+        }
+
+        // Send to Edge Function for bulk insertion
+        const { data: edgeFunctionResponse, error: edgeFunctionError } = await supabase.functions.invoke('bulk-insert-schedules', {
+          body: { schedulesData: schedulesToProcess },
+        });
+
+        if (edgeFunctionError) {
+          console.error("Error invoking bulk-insert-schedules Edge Function:", edgeFunctionError);
+          throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
+        }
+
+        if (edgeFunctionResponse && edgeFunctionResponse.error) {
+          throw new Error(`Edge Function returned error: ${edgeFunctionResponse.error}`);
+        }
+
+        toast.success("Jadwal berhasil diimpor dari file XLSX!");
+        if (selectedDate) {
+          fetchSchedules(selectedDate); // Refresh current view
+        }
+      } catch (error: any) {
+        toast.error(`Gagal memproses file: ${error.message}`);
+        console.error("Error processing XLSX file:", error);
+      } finally {
+        setLoading(false);
+        // Clear the file input
+        if (event.target) {
+          event.target.value = '';
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -347,6 +458,33 @@ const SatpamSchedule: React.FC = () => {
           <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>
             {loading ? "Menyimpan..." : "Simpan Jadwal untuk Semua Lokasi"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Impor Jadwal dari File XLSX</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Tanggal' (misal: YYYY-MM-DD) dan 'Nama Satpam' (nama lengkap personel).
+          </p>
+          <div className="flex items-center space-x-2">
+            <Input
+              id="xlsx-file-upload"
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={handleFileUpload}
+              className="flex-grow"
+              disabled={loading}
+            />
+            <Button
+              onClick={() => document.getElementById('xlsx-file-upload')?.click()}
+              disabled={loading}
+            >
+              <Upload className="mr-2 h-4 w-4" /> Unggah & Proses
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
