@@ -43,10 +43,9 @@ interface ScheduleEntry {
 const SatpamSchedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [satpamList, setSatpamList] = useState<SatpamProfile[]>([]);
-  const [locationList, setLocationList] = useState<Location[]>([]);
+  const [locationList, setLocationList] = useState<Location[]>([]); // Tetap diperlukan untuk iterasi
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
-  const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   const fetchInitialData = async () => {
@@ -61,7 +60,7 @@ const SatpamSchedule: React.FC = () => {
       if (satpamError) throw satpamError;
       setSatpamList(satpamData);
 
-      // Fetch Locations
+      // Fetch Locations (still needed to assign satpam to all locations)
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
         .select('id, name');
@@ -117,47 +116,49 @@ const SatpamSchedule: React.FC = () => {
   }, [selectedDate]);
 
   const handleSaveSchedule = async () => {
-    if (!selectedDate || !selectedSatpamId || !selectedLocationId) {
-      toast.error("Harap lengkapi semua bidang: Tanggal, Personel, dan Lokasi.");
+    if (!selectedDate || !selectedSatpamId) {
+      toast.error("Harap lengkapi semua bidang: Tanggal dan Personel.");
+      return;
+    }
+    if (locationList.length === 0) {
+      toast.error("Tidak ada lokasi yang terdaftar untuk dijadwalkan.");
       return;
     }
 
     setLoading(true);
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      const schedulesToInsert = [];
+      const existingSchedulesForSatpam = schedules.filter(s => 
+        s.user_id === selectedSatpamId && 
+        format(new Date(s.schedule_date), 'yyyy-MM-dd') === formattedDate
+      );
+      const existingLocationIdsForSatpam = new Set(existingSchedulesForSatpam.map(s => s.location_id));
 
-      // Check for existing schedule for the same satpam, location, and date
-      const { data: existingSchedule, error: checkError } = await supabase
-        .from('schedules')
-        .select('id')
-        .eq('schedule_date', formattedDate)
-        .eq('user_id', selectedSatpamId)
-        .eq('location_id', selectedLocationId)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST204') { // PGRST204 means no rows found, which is fine
-        throw checkError;
+      for (const location of locationList) {
+        if (!existingLocationIdsForSatpam.has(location.id)) {
+          schedulesToInsert.push({
+            schedule_date: formattedDate,
+            user_id: selectedSatpamId,
+            location_id: location.id,
+          });
+        }
       }
 
-      if (existingSchedule) {
-        toast.warning("Jadwal ini sudah ada untuk personel dan lokasi yang dipilih pada tanggal ini.");
+      if (schedulesToInsert.length === 0) {
+        toast.warning("Satpam ini sudah dijadwalkan untuk semua lokasi pada tanggal ini.");
         setLoading(false);
         return;
       }
 
       const { error } = await supabase
         .from('schedules')
-        .insert({
-          schedule_date: formattedDate,
-          user_id: selectedSatpamId,
-          location_id: selectedLocationId,
-        });
+        .insert(schedulesToInsert);
 
       if (error) throw error;
 
-      toast.success("Jadwal berhasil ditambahkan!");
+      toast.success("Jadwal berhasil ditambahkan untuk semua lokasi!");
       setSelectedSatpamId(undefined);
-      setSelectedLocationId(undefined);
       if (selectedDate) {
         fetchSchedules(selectedDate); // Refresh the list
       }
@@ -241,24 +242,10 @@ const SatpamSchedule: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Lokasi</label>
-              <Select onValueChange={setSelectedLocationId} value={selectedLocationId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih Lokasi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locationList.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Pilihan Lokasi dihapus karena satpam akan dijadwalkan untuk semua lokasi */}
           </div>
           <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>
-            {loading ? "Menyimpan..." : "Simpan Jadwal"}
+            {loading ? "Menyimpan..." : "Simpan Jadwal untuk Semua Lokasi"}
           </Button>
         </CardContent>
       </Card>
