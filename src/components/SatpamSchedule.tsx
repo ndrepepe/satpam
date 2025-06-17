@@ -162,27 +162,29 @@ const SatpamSchedule: React.FC = () => {
     setLoading(true);
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const schedulesToInsert = [];
-      const existingLocationIdsForSatpamOnDate = new Set(
-        schedules
-          .filter(s => s.user_id === selectedSatpamId && format(new Date(s.schedule_date), 'yyyy-MM-dd') === formattedDate)
-          .map(s => s.location_id)
-      );
+      
+      // Check if the selected satpam is already scheduled for this date
+      const { data: existingSchedules, error: existingSchedulesError } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('user_id', selectedSatpamId)
+        .eq('schedule_date', formattedDate);
 
-      for (const location of locationList) {
-        if (!existingLocationIdsForSatpamOnDate.has(location.id)) {
-          schedulesToInsert.push({
-            schedule_date: formattedDate,
-            user_id: selectedSatpamId,
-            location_id: location.id,
-          });
-        }
-      }
+      if (existingSchedulesError) throw existingSchedulesError;
 
-      if (schedulesToInsert.length === 0) {
-        toast.warning("Satpam ini sudah dijadwalkan untuk semua lokasi pada tanggal ini.");
+      if (existingSchedules && existingSchedules.length > 0) {
+        toast.error("Personel ini sudah memiliki jadwal tugas di tanggal yang sama.");
         setLoading(false);
         return;
+      }
+
+      const schedulesToInsert = [];
+      for (const location of locationList) {
+        schedulesToInsert.push({
+          schedule_date: formattedDate,
+          user_id: selectedSatpamId,
+          location_id: location.id,
+        });
       }
 
       const { error } = await supabase
@@ -250,6 +252,23 @@ const SatpamSchedule: React.FC = () => {
 
     setLoading(true);
     try {
+      // VALIDATION: Check if the new selected satpam is already assigned on the original schedule date
+      const { data: existingAssignment, error: existingAssignmentError } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('user_id', newSelectedSatpamId)
+        .eq('schedule_date', originalScheduleDate)
+        .limit(1); // Only need to know if at least one exists
+
+      if (existingAssignmentError) throw existingAssignmentError;
+
+      if (existingAssignment && existingAssignment.length > 0) {
+        const newSatpamName = satpamList.find(s => s.id === newSelectedSatpamId)?.first_name || 'Personel ini';
+        toast.error(`${newSatpamName} sudah memiliki jadwal tugas di tanggal ${format(new Date(originalScheduleDate), 'dd MMMM yyyy', { locale: idLocale })}.`);
+        setLoading(false);
+        return;
+      }
+
       // Update all schedule entries for the original user on the original date
       const { error } = await supabase
         .from('schedules')
