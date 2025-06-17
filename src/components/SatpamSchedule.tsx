@@ -73,6 +73,12 @@ const SatpamSchedule: React.FC = () => {
   const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
 
+  // New states for date range filtering
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [rangeSchedules, setRangeSchedules] = useState<ScheduleEntry[]>([]);
+
+
   // Maps for quick lookup during XLSX processing
   const satpamNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -140,6 +146,47 @@ const SatpamSchedule: React.FC = () => {
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal: ${error.message}`);
       console.error("Error fetching schedules:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRangeSchedules = async () => {
+    if (!startDate || !endDate) {
+      toast.error("Harap pilih tanggal mulai dan tanggal akhir.");
+      return;
+    }
+    if (startDate > endDate) {
+      toast.error("Tanggal mulai tidak boleh lebih lambat dari tanggal akhir.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formattedStartDate = format(startDate, 'yyyy-MM-dd');
+      const formattedEndDate = format(endDate, 'yyyy-MM-dd');
+
+      const { data, error } = await supabase
+        .from('schedules')
+        .select(`
+          id,
+          schedule_date,
+          user_id,
+          location_id,
+          profiles (first_name, last_name, id_number),
+          locations (name)
+        `)
+        .gte('schedule_date', formattedStartDate)
+        .lte('schedule_date', formattedEndDate)
+        .order('schedule_date', { ascending: true })
+        .order('profiles.first_name', { ascending: true });
+
+      if (error) throw error;
+      setRangeSchedules(data);
+      toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
+    } catch (error: any) {
+      toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
+      console.error("Error fetching range schedules:", error);
     } finally {
       setLoading(false);
     }
@@ -246,6 +293,10 @@ const SatpamSchedule: React.FC = () => {
         if (selectedDate) {
           fetchSchedules(selectedDate);
         }
+        // Also refresh range schedules if they are currently displayed
+        if (startDate && endDate) {
+          fetchRangeSchedules();
+        }
       } catch (error: any) {
         toast.error(`Gagal menghapus jadwal: ${error.message}`);
         console.error("Error deleting grouped schedule:", error);
@@ -310,6 +361,10 @@ const SatpamSchedule: React.FC = () => {
       
       if (selectedDate) {
         await fetchSchedules(selectedDate); // Re-fetch schedules to update the table
+      }
+      // Also refresh range schedules if they are currently displayed
+      if (startDate && endDate) {
+        fetchRangeSchedules();
       }
     } catch (error: any) {
       toast.error(`Gagal memperbarui penugasan personel: ${error.message}`);
@@ -433,6 +488,10 @@ const SatpamSchedule: React.FC = () => {
         toast.success("Jadwal berhasil diimpor dari file XLSX!");
         if (selectedDate) {
           fetchSchedules(selectedDate); // Refresh current view
+        }
+        // Also refresh range schedules if they are currently displayed
+        if (startDate && endDate) {
+          fetchRangeSchedules();
         }
       } catch (error: any) {
         toast.error(`Gagal memproses file: ${error.message}`);
@@ -588,6 +647,100 @@ const SatpamSchedule: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* New Card for Date Range Schedule View */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Lihat Jadwal Berdasarkan Rentang Tanggal</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Mulai</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal mulai</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex-1">
+              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Akhir</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal akhir</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <Button onClick={fetchRangeSchedules} className="w-full" disabled={loading || !startDate || !endDate}>
+            {loading ? "Memuat..." : "Tampilkan Jadwal"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {rangeSchedules.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Jadwal dalam Rentang Tanggal</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Personel</TableHead>
+                  <TableHead>No. ID</TableHead>
+                  <TableHead>Lokasi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rangeSchedules.map((schedule) => (
+                  <TableRow key={schedule.id}>
+                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
+                    <TableCell>{schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A'}</TableCell>
+                    <TableCell>{schedule.profiles?.id_number || 'N/A'}</TableCell>
+                    <TableCell>{schedule.locations?.name || 'N/A'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
