@@ -73,7 +73,8 @@ const SupervisorDashboard = () => {
 
         if (reportsError) {
           console.error("Error fetching reports:", reportsError);
-          toast.error("Gagal memuat daftar laporan.");
+          // Mengubah pesan toast agar lebih spesifik
+          toast.error(`Gagal memuat daftar laporan: ${reportsError.message}`);
         } else if (reportsData) {
           setReports(reportsData as Report[]);
         }
