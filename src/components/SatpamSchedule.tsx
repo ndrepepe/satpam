@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Edit } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,17 @@ import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface SatpamProfile {
   id: string;
@@ -40,7 +51,6 @@ interface ScheduleEntry {
   locations: { name: string } | null;
 }
 
-// New interface for grouped schedules
 interface GroupedScheduleEntry {
   user_id: string;
   schedule_date: string;
@@ -54,6 +64,12 @@ const SatpamSchedule: React.FC = () => {
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+
+  // State for Edit Dialog
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [editingFirstName, setEditingFirstName] = useState('');
+  const [editingLastName, setEditingLastName] = useState('');
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -120,7 +136,6 @@ const SatpamSchedule: React.FC = () => {
     }
   }, [selectedDate]);
 
-  // Memoized grouped schedules for display
   const groupedSchedules = useMemo(() => {
     const grouped = new Map<string, GroupedScheduleEntry>();
     schedules.forEach(schedule => {
@@ -216,6 +231,51 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
+  const handleEditProfileClick = (userId: string) => {
+    const profileToEdit = satpamList.find(satpam => satpam.id === userId);
+    if (profileToEdit) {
+      setEditingProfileId(profileToEdit.id);
+      setEditingFirstName(profileToEdit.first_name);
+      setEditingLastName(profileToEdit.last_name);
+      setIsEditDialogOpen(true);
+    } else {
+      toast.error("Profil satpam tidak ditemukan.");
+    }
+  };
+
+  const handleSaveProfileChanges = async () => {
+    if (!editingProfileId || !editingFirstName || !editingLastName) {
+      toast.error("Nama depan dan nama belakang tidak boleh kosong.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ first_name: editingFirstName, last_name: editingLastName })
+        .eq('id', editingProfileId);
+
+      if (error) throw error;
+
+      toast.success("Nama personel berhasil diperbarui.");
+      setIsEditDialogOpen(false);
+      setEditingProfileId(null);
+      setEditingFirstName('');
+      setEditingLastName('');
+      // Re-fetch initial data to update satpamList and then schedules
+      await fetchInitialData();
+      if (selectedDate) {
+        await fetchSchedules(selectedDate);
+      }
+    } catch (error: any) {
+      toast.error(`Gagal memperbarui nama personel: ${error.message}`);
+      console.error("Error updating profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -293,16 +353,26 @@ const SatpamSchedule: React.FC = () => {
                   <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
                     <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>Semua Lokasi</TableCell> {/* Tampilkan 'Semua Lokasi' */}
+                    <TableCell>Semua Lokasi</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                        disabled={loading}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditProfileClick(schedule.user_id)}
+                          disabled={loading}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -311,6 +381,47 @@ const SatpamSchedule: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Nama Personel</DialogTitle>
+            <DialogDescription>
+              Ubah nama depan dan nama belakang personel di sini. Klik simpan saat Anda selesai.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="firstName" className="text-right">
+                Nama Depan
+              </Label>
+              <Input
+                id="firstName"
+                value={editingFirstName}
+                onChange={(e) => setEditingFirstName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="lastName" className="text-right">
+                Nama Belakang
+              </Label>
+              <Input
+                id="lastName"
+                value={editingLastName}
+                onChange={(e) => setEditingLastName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleSaveProfileChanges} disabled={loading}>
+              {loading ? "Menyimpan..." : "Simpan Perubahan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
