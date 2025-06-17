@@ -59,6 +59,14 @@ interface GroupedScheduleEntry {
   idNumber?: string;
 }
 
+interface SummarizedRangeScheduleEntry {
+  schedule_date: string;
+  user_id: string;
+  profileName: string;
+  idNumber?: string;
+  locationDisplay: string;
+}
+
 const SatpamSchedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [satpamList, setSatpamList] = useState<SatpamProfile[]>([]);
@@ -178,7 +186,7 @@ const SatpamSchedule: React.FC = () => {
         `)
         .gte('schedule_date', formattedStartDate)
         .lte('schedule_date', formattedEndDate)
-        .order('schedule_date', { ascending: true }); // Hanya mengurutkan berdasarkan tanggal di Supabase
+        .order('schedule_date', { ascending: true }); 
 
       if (error) throw error;
       
@@ -226,6 +234,69 @@ const SatpamSchedule: React.FC = () => {
     });
     return Array.from(grouped.values());
   }, [schedules]);
+
+  // New useMemo for summarizing range schedules
+  const processedRangeSchedules = useMemo(() => {
+    const grouped = new Map<string, {
+      user_id: string;
+      schedule_date: string;
+      profileName: string;
+      idNumber?: string;
+      assignedLocationIds: Set<string>;
+      locations: string[]; // To store names of assigned locations if not 'All'
+    }>();
+
+    rangeSchedules.forEach(schedule => {
+      const key = `${schedule.schedule_date}-${schedule.user_id}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          user_id: schedule.user_id,
+          schedule_date: schedule.schedule_date,
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
+          idNumber: schedule.profiles?.id_number || 'N/A',
+          assignedLocationIds: new Set(),
+          locations: []
+        });
+      }
+      const entry = grouped.get(key)!;
+      entry.assignedLocationIds.add(schedule.location_id);
+      if (schedule.locations?.name) {
+        entry.locations.push(schedule.locations.name);
+      }
+    });
+
+    const result: SummarizedRangeScheduleEntry[] = [];
+    grouped.forEach(entry => {
+      let locationDisplay: string;
+      if (locationList.length > 0 && entry.assignedLocationIds.size === locationList.length) {
+        locationDisplay = "Semua Lokasi";
+      } else if (entry.assignedLocationIds.size === 1) {
+        locationDisplay = entry.locations[0] || 'N/A'; 
+      } else if (entry.assignedLocationIds.size > 1) {
+        locationDisplay = "Beberapa Lokasi"; 
+      } else {
+        locationDisplay = 'N/A';
+      }
+
+      result.push({
+        schedule_date: entry.schedule_date,
+        user_id: entry.user_id,
+        profileName: entry.profileName,
+        idNumber: entry.idNumber,
+        locationDisplay: locationDisplay
+      });
+    });
+
+    // Sort the summarized results
+    result.sort((a, b) => {
+      const dateComparison = new Date(a.schedule_date).getTime() - new Date(b.schedule_date).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      return a.profileName.localeCompare(b.profileName);
+    });
+
+    return result;
+  }, [rangeSchedules, locationList]);
+
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId) {
@@ -518,7 +589,7 @@ const SatpamSchedule: React.FC = () => {
     const headers = ["Nama", "No ID"];
     const today = new Date();
     // Add next 30 days as date headers
-    for (let i = 0; i < 30; i++) { // Changed from 7 to 30
+    for (let i = 0; i < 30; i++) { 
       headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
     }
 
@@ -531,8 +602,8 @@ const SatpamSchedule: React.FC = () => {
         `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
         exampleSatpam1.id_number || 'ID001'
       ];
-      for (let i = 0; i < 30; i++) { // Changed from 7 to 30
-        row1.push(i === 0 || i === 2 ? 'X' : null); // Example: assigned on day 0 and day 2
+      for (let i = 0; i < 30; i++) { 
+        row1.push(i === 0 || i === 2 ? 'X' : null); 
       }
       ws_data.push(row1);
 
@@ -542,18 +613,18 @@ const SatpamSchedule: React.FC = () => {
           `${exampleSatpam2.first_name} ${exampleSatpam2.last_name}`,
           exampleSatpam2.id_number || 'ID002'
         ];
-        for (let i = 0; i < 30; i++) { // Changed from 7 to 30
-          row2.push(i === 1 || i === 3 ? 'X' : null); // Example: assigned on day 1 and day 3
+        for (let i = 0; i < 30; i++) { 
+          row2.push(i === 1 || i === 3 ? 'X' : null); 
         }
         ws_data.push(row2);
       }
     } else {
       // Fallback if no satpam data
       const row1: (string | null)[] = ["Budi Santoso", "ID001"];
-      for (let i = 0; i < 30; i++) row1.push(null); // Changed from 7 to 30
+      for (let i = 0; i < 30; i++) row1.push(null); 
       ws_data.push(row1);
       const row2: (string | null)[] = ["Siti Aminah", "ID002"];
-      for (let i = 0; i < 30; i++) row2.push(null); // Changed from 7 to 30
+      for (let i = 0; i < 30; i++) row2.push(null); 
       ws_data.push(row2);
     }
 
@@ -719,7 +790,7 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {rangeSchedules.length > 0 && (
+      {processedRangeSchedules.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Jadwal dalam Rentang Tanggal</CardTitle>
@@ -735,12 +806,12 @@ const SatpamSchedule: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rangeSchedules.map((schedule) => (
-                  <TableRow key={schedule.id}>
+                {processedRangeSchedules.map((schedule) => (
+                  <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A'}</TableCell>
-                    <TableCell>{schedule.profiles?.id_number || 'N/A'}</TableCell>
-                    <TableCell>{schedule.locations?.name || 'N/A'}</TableCell>
+                    <TableCell>{schedule.profileName}</TableCell>
+                    <TableCell>{schedule.idNumber}</TableCell>
+                    <TableCell>{schedule.locationDisplay}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -773,7 +844,7 @@ const SatpamSchedule: React.FC = () => {
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
                     <TableCell>{schedule.profileName}</TableCell>
                     <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>Semua Lokasi</TableCell>
+                    <TableCell>Semua Lokasi</TableCell> {/* This already says "Semua Lokasi" */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
