@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseAdmin } from '@/integrations/supabase/client'; // Import supabaseAdmin
 
 const editPersonnelSchema = z.object({
   first_name: z.string().min(1, "Nama depan wajib diisi"),
@@ -55,7 +55,8 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
     console.log("New values to send:", values);
 
     try {
-      const { error } = await supabase
+      // Update public.profiles table
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           first_name: values.first_name,
@@ -64,10 +65,27 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
         })
         .eq('id', personnel.id);
 
-      if (error) {
-        console.error("Supabase update error:", error); // Log the actual error
-        toast.error(`Gagal memperbarui profil: ${error.message}`);
-        return;
+      if (profileError) {
+        console.error("Supabase profile update error:", profileError);
+        throw profileError; // Throw to be caught by the outer catch
+      }
+
+      // Update auth.users metadata using supabaseAdmin
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUser(personnel.id, {
+        data: {
+          first_name: values.first_name,
+          last_name: values.last_name,
+          // Supabase often derives display_name from first_name/last_name in metadata.
+          // If not, you might explicitly set display_name here:
+          // display_name: `${values.first_name} ${values.last_name}`,
+        },
+      });
+
+      if (authUpdateError) {
+        console.error("Supabase auth.users metadata update error:", authUpdateError);
+        // Decide if this error should prevent the profile update success toast.
+        // For now, we'll treat it as a critical error for full synchronization.
+        throw authUpdateError;
       }
 
       console.log("Supabase update successful (no error returned).");
