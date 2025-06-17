@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } => '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -47,7 +47,7 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string } | null;
+  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Added id_number
   locations: { name: string } | null;
 }
 
@@ -55,6 +55,7 @@ interface GroupedScheduleEntry {
   user_id: string;
   schedule_date: string;
   profileName: string;
+  idNumber?: string; // Added idNumber
 }
 
 const SatpamSchedule: React.FC = () => {
@@ -79,7 +80,7 @@ const SatpamSchedule: React.FC = () => {
     try {
       const { data: satpamData, error: satpamError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role')
+        .select('id, first_name, last_name, role, id_number') // Fetch id_number
         .eq('role', 'satpam');
 
       if (satpamError) throw satpamError;
@@ -116,7 +117,7 @@ const SatpamSchedule: React.FC = () => {
           schedule_date,
           user_id,
           location_id,
-          profiles (first_name, last_name),
+          profiles (first_name, last_name, id_number),
           locations (name)
         `)
         .eq('schedule_date', formattedDate)
@@ -153,6 +154,7 @@ const SatpamSchedule: React.FC = () => {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
           profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
+          idNumber: schedule.profiles?.id_number || 'N/A', // Include idNumber
         });
       }
     });
@@ -524,6 +526,7 @@ const SatpamSchedule: React.FC = () => {
                 <TableRow>
                   <TableHead>Tanggal</TableHead>
                   <TableHead>Personel</TableHead>
+                  <TableHead>No. ID</TableHead> {/* New Table Head */}
                   <TableHead>Lokasi</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -533,6 +536,7 @@ const SatpamSchedule: React.FC = () => {
                   <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
                     <TableCell>{schedule.profileName}</TableCell>
+                    <TableCell>{schedule.idNumber}</TableCell> {/* Display idNumber */}
                     <TableCell>Semua Lokasi</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
