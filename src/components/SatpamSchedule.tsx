@@ -14,7 +14,7 @@ import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, addDays } from 'date-fns'; // Import addDays
+import { format, addDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +35,7 @@ interface SatpamProfile {
   first_name: string;
   last_name: string;
   role: string;
-  id_number?: string; // Ensure id_number is here
+  id_number?: string;
 }
 
 interface Location {
@@ -451,8 +451,8 @@ const SatpamSchedule: React.FC = () => {
   const handleDownloadTemplate = () => {
     const headers = ["Nama", "No ID"];
     const today = new Date();
-    // Add next 7 days as date headers
-    for (let i = 0; i < 7; i++) {
+    // Add next 30 days as date headers
+    for (let i = 0; i < 30; i++) { // Changed from 7 to 30
       headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
     }
 
@@ -465,7 +465,7 @@ const SatpamSchedule: React.FC = () => {
         `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
         exampleSatpam1.id_number || 'ID001'
       ];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 30; i++) { // Changed from 7 to 30
         row1.push(i === 0 || i === 2 ? 'X' : null); // Example: assigned on day 0 and day 2
       }
       ws_data.push(row1);
@@ -476,7 +476,7 @@ const SatpamSchedule: React.FC = () => {
           `${exampleSatpam2.first_name} ${exampleSatpam2.last_name}`,
           exampleSatpam2.id_number || 'ID002'
         ];
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 30; i++) { // Changed from 7 to 30
           row2.push(i === 1 || i === 3 ? 'X' : null); // Example: assigned on day 1 and day 3
         }
         ws_data.push(row2);
@@ -484,10 +484,10 @@ const SatpamSchedule: React.FC = () => {
     } else {
       // Fallback if no satpam data
       const row1: (string | null)[] = ["Budi Santoso", "ID001"];
-      for (let i = 0; i < 7; i++) row1.push(null);
+      for (let i = 0; i < 30; i++) row1.push(null); // Changed from 7 to 30
       ws_data.push(row1);
       const row2: (string | null)[] = ["Siti Aminah", "ID002"];
-      for (let i = 0; i < 7; i++) row2.push(null);
+      for (let i = 0; i < 30; i++) row2.push(null); // Changed from 7 to 30
       ws_data.push(row2);
     }
 
