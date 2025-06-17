@@ -25,7 +25,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,8 +67,7 @@ const SatpamSchedule: React.FC = () => {
   // State for Edit Dialog
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  const [editingFirstName, setEditingFirstName] = useState('');
-  const [editingLastName, setEditingLastName] = useState('');
+  const [editingFullName, setEditingFullName] = useState(''); // Combined full name
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -235,8 +233,7 @@ const SatpamSchedule: React.FC = () => {
     const profileToEdit = satpamList.find(satpam => satpam.id === userId);
     if (profileToEdit) {
       setEditingProfileId(profileToEdit.id);
-      setEditingFirstName(profileToEdit.first_name);
-      setEditingLastName(profileToEdit.last_name);
+      setEditingFullName(`${profileToEdit.first_name || ''} ${profileToEdit.last_name || ''}`.trim());
       setIsEditDialogOpen(true);
     } else {
       toast.error("Profil satpam tidak ditemukan.");
@@ -244,16 +241,20 @@ const SatpamSchedule: React.FC = () => {
   };
 
   const handleSaveProfileChanges = async () => {
-    if (!editingProfileId || !editingFirstName || !editingLastName) {
-      toast.error("Nama depan dan nama belakang tidak boleh kosong.");
+    if (!editingProfileId || !editingFullName.trim()) {
+      toast.error("Nama lengkap tidak boleh kosong.");
       return;
     }
 
     setLoading(true);
     try {
+      const nameParts = editingFullName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' '); // Join remaining parts as last name
+
       const { error } = await supabase
         .from('profiles')
-        .update({ first_name: editingFirstName, last_name: editingLastName })
+        .update({ first_name: firstName, last_name: lastName || null }) // Set to null if last name is empty
         .eq('id', editingProfileId);
 
       if (error) throw error;
@@ -261,12 +262,11 @@ const SatpamSchedule: React.FC = () => {
       toast.success("Nama personel berhasil diperbarui.");
       setIsEditDialogOpen(false);
       setEditingProfileId(null);
-      setEditingFirstName('');
-      setEditingLastName('');
-      // Re-fetch initial data to update satpamList and then schedules
-      await fetchInitialData();
+      setEditingFullName('');
+      
+      await fetchInitialData(); // Re-fetch satpam list to update names in dropdown
       if (selectedDate) {
-        await fetchSchedules(selectedDate);
+        await fetchSchedules(selectedDate); // Re-fetch schedules to update names in table
       }
     } catch (error: any) {
       toast.error(`Gagal memperbarui nama personel: ${error.message}`);
@@ -388,29 +388,18 @@ const SatpamSchedule: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Edit Nama Personel</DialogTitle>
             <DialogDescription>
-              Ubah nama depan dan nama belakang personel di sini. Klik simpan saat Anda selesai.
+              Ubah nama lengkap personel di sini. Klik simpan saat Anda selesai.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="firstName" className="text-right">
-                Nama Depan
+              <Label htmlFor="fullName" className="text-right">
+                Nama Lengkap
               </Label>
               <Input
-                id="firstName"
-                value={editingFirstName}
-                onChange={(e) => setEditingFirstName(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="lastName" className="text-right">
-                Nama Belakang
-              </Label>
-              <Input
-                id="lastName"
-                value={editingLastName}
-                onChange={(e) => setEditingLastName(e.target.value)}
+                id="fullName"
+                value={editingFullName}
+                onChange={(e) => setEditingFullName(e.target.value)}
                 className="col-span-3"
               />
             </div>
