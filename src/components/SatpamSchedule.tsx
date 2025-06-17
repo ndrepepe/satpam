@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import * as XLSX from 'xlsx';
+import *s XLSX from 'xlsx';
 
 interface SatpamProfile {
   id: string;
@@ -61,7 +61,7 @@ interface GroupedScheduleEntry {
 
 interface SummarizedRangeScheduleEntry {
   schedule_date: string;
-  user_id: string;
+  user_id: string; // Added user_id for actions
   profileName: string;
   idNumber?: string;
   locationDisplay: string;
@@ -803,6 +803,7 @@ const SatpamSchedule: React.FC = () => {
                   <TableHead>Personel</TableHead>
                   <TableHead>No. ID</TableHead>
                   <TableHead>Lokasi</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead> {/* Added Aksi column */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -812,6 +813,26 @@ const SatpamSchedule: React.FC = () => {
                     <TableCell>{schedule.profileName}</TableCell>
                     <TableCell>{schedule.idNumber}</TableCell>
                     <TableCell>{schedule.locationDisplay}</TableCell>
+                    <TableCell className="text-right"> {/* Added action buttons */}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditScheduleAssignmentClick(schedule.user_id, schedule.schedule_date)}
+                          disabled={loading}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
