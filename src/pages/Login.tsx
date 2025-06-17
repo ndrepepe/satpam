@@ -46,9 +46,10 @@ const Login = () => {
           localization={{
             variables: {
               sign_in: {
-                link_text: {
-                  no_account: null, // Mengatur teks ini menjadi null untuk menyembunyikan
-                },
+                // Menghapus properti link_text sepenuhnya untuk menyembunyikan semua tautan
+                // link_text: {
+                //   no_account: null,
+                // },
               },
             },
           }}
