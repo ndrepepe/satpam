@@ -11,10 +11,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Perbaikan di sini
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns'; // Import addDays
 import { id as idLocale } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,13 +28,14 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import * as XLSX from 'xlsx'; // Import xlsx
+import * as XLSX from 'xlsx';
 
 interface SatpamProfile {
   id: string;
   first_name: string;
   last_name: string;
   role: string;
+  id_number?: string; // Ensure id_number is here
 }
 
 interface Location {
@@ -47,7 +48,7 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Added id_number
+  profiles: { first_name: string; last_name: string; id_number?: string } | null;
   locations: { name: string } | null;
 }
 
@@ -55,7 +56,7 @@ interface GroupedScheduleEntry {
   user_id: string;
   schedule_date: string;
   profileName: string;
-  idNumber?: string; // Added idNumber
+  idNumber?: string;
 }
 
 const SatpamSchedule: React.FC = () => {
@@ -73,23 +74,34 @@ const SatpamSchedule: React.FC = () => {
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
 
   // Maps for quick lookup during XLSX processing
-  const [satpamNameMap, setSatpamNameMap] = useState<Map<string, string>>(new Map()); // Full name -> ID
+  const satpamNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    satpamList.forEach(s => {
+      map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
+    });
+    return map;
+  }, [satpamList]);
+
+  const idNumberToUserIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    satpamList.forEach(s => {
+      if (s.id_number) {
+        map.set(s.id_number, s.id);
+      }
+    });
+    return map;
+  }, [satpamList]);
 
   const fetchInitialData = async () => {
     setLoading(true);
     try {
       const { data: satpamData, error: satpamError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, id_number') // Fetch id_number
+        .select('id, first_name, last_name, role, id_number')
         .eq('role', 'satpam');
 
       if (satpamError) throw satpamError;
       setSatpamList(satpamData);
-      const newSatpamMap = new Map<string, string>();
-      satpamData.forEach(s => {
-        newSatpamMap.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
-      });
-      setSatpamNameMap(newSatpamMap);
 
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
@@ -154,7 +166,7 @@ const SatpamSchedule: React.FC = () => {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
           profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
-          idNumber: schedule.profiles?.id_number || 'N/A', // Include idNumber
+          idNumber: schedule.profiles?.id_number || 'N/A',
         });
       }
     });
@@ -322,10 +334,44 @@ const SatpamSchedule: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet);
-
-        if (json.length === 0) {
+        
+        // Read data as array of arrays to get headers and rows
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+        if (rawData.length === 0) {
           toast.error("File XLSX kosong atau tidak memiliki data.");
+          setLoading(false);
+          return;
+        }
+
+        const headers = rawData[0];
+        const dataRows = rawData.slice(1);
+
+        const nameColIndex = headers.indexOf('Nama');
+        const idColIndex = headers.indexOf('No ID');
+
+        if (nameColIndex === -1 || idColIndex === -1) {
+          toast.error("File XLSX harus memiliki kolom 'Nama' dan 'No ID'.");
+          setLoading(false);
+          return;
+        }
+
+        const dateColumns: { header: string; index: number }[] = [];
+        for (let i = 0; i < headers.length; i++) {
+          if (i !== nameColIndex && i !== idColIndex) {
+            try {
+              // Attempt to parse header as a date (YYYY-MM-DD)
+              const parsedDate = new Date(headers[i]);
+              if (!isNaN(parsedDate.getTime())) { // Check if it's a valid date
+                dateColumns.push({ header: format(parsedDate, 'yyyy-MM-dd'), index: i });
+              }
+            } catch (e) {
+              // Not a date column, ignore
+            }
+          }
+        }
+
+        if (dateColumns.length === 0) {
+          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (misal: YYYY-MM-DD).");
           setLoading(false);
           return;
         }
@@ -333,46 +379,39 @@ const SatpamSchedule: React.FC = () => {
         const schedulesToProcess: { date: string; userId: string }[] = [];
         let hasError = false;
 
-        for (const row of json as any[]) {
-          const rawDate = row['Tanggal']; // Assuming 'Tanggal' column
-          const satpamFullName = row['Nama Satpam']; // Assuming 'Nama Satpam' column
+        for (const row of dataRows) {
+          const satpamName = row[nameColIndex]?.toString().trim();
+          const satpamIdNumber = row[idColIndex]?.toString().trim();
 
-          if (!rawDate || !satpamFullName) {
-            toast.error("File XLSX harus memiliki kolom 'Tanggal' dan 'Nama Satpam'.");
-            hasError = true;
-            break;
+          if (!satpamName || !satpamIdNumber) {
+            // Skip rows with missing name or ID, or show a warning
+            console.warn("Skipping row due to missing Nama or No ID:", row);
+            continue;
           }
 
-          // Date parsing: handle various formats, assuming Excel date number or string
-          let formattedDate: string;
-          if (typeof rawDate === 'number') {
-            // Excel date number (days since 1900-01-01)
-            const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Excel's epoch is Dec 30, 1899
-            const dateObj = new Date(excelEpoch.getTime() + rawDate * 24 * 60 * 60 * 1000);
-            formattedDate = format(dateObj, 'yyyy-MM-dd');
-          } else {
-            // Assume string format like YYYY-MM-DD or DD-MM-YYYY
-            try {
-              formattedDate = format(new Date(rawDate), 'yyyy-MM-dd');
-            } catch (dateError) {
-              toast.error(`Format tanggal tidak valid: ${rawDate}. Gunakan YYYY-MM-DD.`);
-              hasError = true;
-              break;
-            }
-          }
-
-          const userId = satpamNameMap.get(satpamFullName.trim());
+          const userId = idNumberToUserIdMap.get(satpamIdNumber);
 
           if (!userId) {
-            toast.error(`Personel "${satpamFullName}" tidak ditemukan di daftar satpam.`);
+            toast.error(`Personel dengan No ID "${satpamIdNumber}" tidak ditemukan di daftar satpam.`);
             hasError = true;
             break;
           }
 
-          schedulesToProcess.push({ date: formattedDate, userId });
+          for (const dateCol of dateColumns) {
+            const cellValue = row[dateCol.index]?.toString().trim();
+            if (cellValue && cellValue !== '') { // If cell has any value, consider it assigned
+              schedulesToProcess.push({ date: dateCol.header, userId: userId });
+            }
+          }
         }
 
         if (hasError) {
+          setLoading(false);
+          return;
+        }
+
+        if (schedulesToProcess.length === 0) {
+          toast.info("Tidak ada jadwal yang ditemukan dalam file yang diunggah.");
           setLoading(false);
           return;
         }
@@ -410,11 +449,48 @@ const SatpamSchedule: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const ws_data = [
-      ["Tanggal", "Nama Satpam"], // Headers
-      ["2023-10-26", "Budi Santoso"],
-      ["2023-10-27", "Siti Aminah"],
-    ];
+    const headers = ["Nama", "No ID"];
+    const today = new Date();
+    // Add next 7 days as date headers
+    for (let i = 0; i < 7; i++) {
+      headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
+    }
+
+    const ws_data: (string | null)[][] = [headers];
+
+    // Add some example data rows
+    if (satpamList.length > 0) {
+      const exampleSatpam1 = satpamList[0];
+      const row1: (string | null)[] = [
+        `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
+        exampleSatpam1.id_number || 'ID001'
+      ];
+      for (let i = 0; i < 7; i++) {
+        row1.push(i === 0 || i === 2 ? 'X' : null); // Example: assigned on day 0 and day 2
+      }
+      ws_data.push(row1);
+
+      if (satpamList.length > 1) {
+        const exampleSatpam2 = satpamList[1];
+        const row2: (string | null)[] = [
+          `${exampleSatpam2.first_name} ${exampleSatpam2.last_name}`,
+          exampleSatpam2.id_number || 'ID002'
+        ];
+        for (let i = 0; i < 7; i++) {
+          row2.push(i === 1 || i === 3 ? 'X' : null); // Example: assigned on day 1 and day 3
+        }
+        ws_data.push(row2);
+      }
+    } else {
+      // Fallback if no satpam data
+      const row1: (string | null)[] = ["Budi Santoso", "ID001"];
+      for (let i = 0; i < 7; i++) row1.push(null);
+      ws_data.push(row1);
+      const row2: (string | null)[] = ["Siti Aminah", "ID002"];
+      for (let i = 0; i < 7; i++) row2.push(null);
+      ws_data.push(row2);
+    }
+
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Jadwal_Template");
@@ -483,7 +559,7 @@ const SatpamSchedule: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Tanggal' (misal: YYYY-MM-DD) dan 'Nama Satpam' (nama lengkap personel).
+            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Nama' (nama lengkap personel) dan 'No ID' (nomor ID personel) di awal, diikuti oleh kolom-kolom tanggal (misal: YYYY-MM-DD). Isi sel dengan nilai apa pun (misal: 'X') untuk menandakan personel bertugas pada tanggal tersebut.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-2">
             <Input
@@ -526,7 +602,7 @@ const SatpamSchedule: React.FC = () => {
                 <TableRow>
                   <TableHead>Tanggal</TableHead>
                   <TableHead>Personel</TableHead>
-                  <TableHead>No. ID</TableHead> {/* New Table Head */}
+                  <TableHead>No. ID</TableHead>
                   <TableHead>Lokasi</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -536,7 +612,7 @@ const SatpamSchedule: React.FC = () => {
                   <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
                     <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>{schedule.idNumber}</TableCell> {/* Display idNumber */}
+                    <TableCell>{schedule.idNumber}</TableCell>
                     <TableCell>Semua Lokasi</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
