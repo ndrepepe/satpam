@@ -178,11 +178,18 @@ const SatpamSchedule: React.FC = () => {
         `)
         .gte('schedule_date', formattedStartDate)
         .lte('schedule_date', formattedEndDate)
-        .order('schedule_date', { ascending: true }) // Corrected order syntax
-        .order('profiles.first_name', { ascending: true }); // Corrected order syntax
+        .order('schedule_date', { ascending: true }); // Hanya mengurutkan berdasarkan tanggal di Supabase
 
       if (error) throw error;
-      setRangeSchedules(data);
+      
+      // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
+      const sortedData = data.sort((a, b) => {
+        const nameA = a.profiles?.first_name || '';
+        const nameB = b.profiles?.first_name || '';
+        return nameA.localeCompare(nameB);
+      });
+
+      setRangeSchedules(sortedData);
       toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
