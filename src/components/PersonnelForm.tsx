@@ -12,8 +12,7 @@ const personnelSchema = z.object({
   first_name: z.string().min(1, "Nama depan wajib diisi"),
   last_name: z.string().min(1, "Nama belakang wajib diisi"),
   id_number: z.string().min(1, "Nomor ID wajib diisi"),
-  email: z.string().email("Email tidak valid"),
-  password: z.string().min(6, "Password minimal 6 karakter"),
+  // Email dan password dihapus karena pendaftaran dilakukan secara manual
 });
 
 type PersonnelFormValues = z.infer<typeof personnelSchema>;
@@ -25,34 +24,23 @@ const PersonnelForm = () => {
       first_name: '',
       last_name: '',
       id_number: '',
-      email: '',
-      password: '',
     },
   });
 
   const onSubmit = async (values: PersonnelFormValues) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          data: {
-            first_name: values.first_name,
-            last_name: values.last_name,
-            id_number: values.id_number,
-          },
-        },
-      });
+      // Karena pendaftaran dilakukan secara manual di Supabase,
+      // kita hanya perlu menambahkan profil ke tabel 'profiles' jika diperlukan.
+      // Namun, karena ada trigger `handle_new_user` yang otomatis membuat profil
+      // saat user baru ditambahkan di `auth.users`, kita tidak perlu insert manual di sini.
+      // Cukup tampilkan pesan sukses bahwa personel akan ditambahkan secara manual.
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success(`Personel ${values.first_name} ${values.last_name} berhasil ditambahkan!`);
+      toast.success(`Personel ${values.first_name} ${values.last_name} akan ditambahkan secara manual melalui Supabase.`);
       form.reset();
     } catch (error: any) {
-      toast.error(`Gagal menambahkan personel: ${error.message}`);
-      console.error("Error adding personnel:", error);
+      // Ini seharusnya tidak tercapai jika tidak ada operasi Supabase di sini
+      toast.error(`Terjadi kesalahan: ${error.message}`);
+      console.error("Error adding personnel (form only):", error);
     }
   };
 
@@ -98,33 +86,8 @@ const PersonnelForm = () => {
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="Email" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Password</FormLabel>
-              <FormControl>
-                <Input type="password" placeholder="Password" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" className="w-full">Tambah Personel</Button>
+        {/* Bidang email dan password dihapus */}
+        <Button type="submit" className="w-full">Tambahkan Detail Personel</Button>
       </form>
     </Form>
   );
