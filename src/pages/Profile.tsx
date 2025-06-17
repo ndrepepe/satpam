@@ -25,7 +25,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const [profileLoading, setProfileLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileFormValues & { role?: string } | null>(null);
-  const [isSatpam, setIsSatpam] = useState(false); // State baru untuk peran satpam
+  const [isSatpam, setIsSatpam] = useState(false);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -38,74 +38,82 @@ const Profile = () => {
 
   useEffect(() => {
     if (!loading && !session) {
+      console.log("Profile Page: No session, navigating to /login");
       navigate('/login');
     }
   }, [session, loading, navigate]);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (session?.user) {
-        setProfileLoading(true);
+      if (!session?.user) {
+        console.log("Profile Page: No user in session, cannot fetch profile.");
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+      try {
+        console.log("Profile Page: Attempting to fetch profile for user ID:", session.user.id);
         const { data, error } = await supabase
           .from('profiles')
           .select('first_name, last_name, id_number, role')
           .eq('id', session.user.id)
           .single();
 
-        if (error && error.code !== 'PGRST204') { // PGRST204 means no rows found
-          console.error("Error fetching profile:", error);
-          toast.error("Gagal memuat profil.");
-          setProfileLoading(false);
-          return;
-        }
+        if (error) {
+          if (error.code === 'PGRST204') { // No rows found
+            console.warn("Profile Page: No profile found for user ID:", session.user.id, "Attempting to create one.");
+            // No profile found, attempt to create one
+            const { first_name, last_name, id_number } = session.user.user_metadata || {};
+            console.log("Profile Page: User metadata for new profile:", { first_name, last_name, id_number });
 
-        if (data) {
-          setProfile(data);
-          form.reset(data); // Set form default values
-          if (data.role === 'satpam') {
-            setIsSatpam(true);
-          } else {
-            setIsSatpam(false);
-          }
-        } else {
-          // No profile found, attempt to create one
-          console.log("No profile found for user, attempting to create one.");
-          const { first_name, last_name, id_number } = session.user.user_metadata || {};
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: session.user.id,
-              first_name: first_name || '',
-              last_name: last_name || '',
-              id_number: id_number || '',
-            });
-
-          if (insertError) {
-            console.error("Error creating new profile:", insertError);
-            toast.error("Gagal membuat profil baru.");
-          } else {
-            toast.success("Profil baru berhasil dibuat.");
-            // Re-fetch the newly created profile to populate the form
-            const { data: newData, error: newError } = await supabase
+            const { error: insertError } = await supabase
               .from('profiles')
-              .select('first_name, last_name, id_number, role')
-              .eq('id', session.user.id)
-              .single();
-            if (newError) {
-              console.error("Error re-fetching profile after creation:", newError);
-              toast.error("Gagal memuat profil setelah pembuatan.");
-            } else if (newData) {
-              setProfile(newData);
-              form.reset(newData);
-              if (newData.role === 'satpam') {
-                setIsSatpam(true);
-              } else {
-                setIsSatpam(false);
+              .insert({
+                id: session.user.id,
+                first_name: first_name || '',
+                last_name: last_name || '',
+                id_number: id_number || '',
+              });
+
+            if (insertError) {
+              console.error("Profile Page: Error creating new profile:", insertError);
+              toast.error("Gagal membuat profil baru.");
+            } else {
+              console.log("Profile Page: New profile successfully created. Re-fetching profile.");
+              toast.success("Profil baru berhasil dibuat.");
+              // Re-fetch the newly created profile to populate the form
+              const { data: newData, error: newError } = await supabase
+                .from('profiles')
+                .select('first_name, last_name, id_number, role')
+                .eq('id', session.user.id)
+                .single();
+              if (newError) {
+                console.error("Profile Page: Error re-fetching profile after creation:", newError);
+                toast.error("Gagal memuat profil setelah pembuatan.");
+              } else if (newData) {
+                setProfile(newData);
+                form.reset(newData);
+                setIsSatpam(newData.role === 'satpam');
+                console.log("Profile Page: Profile re-fetched and form reset with new data.");
               }
             }
+          } else {
+            console.error("Profile Page: Error fetching profile:", error);
+            toast.error("Gagal memuat profil.");
           }
+        } else if (data) {
+          setProfile(data);
+          form.reset(data); // Set form default values
+          setIsSatpam(data.role === 'satpam');
+          console.log("Profile Page: Profile fetched successfully and form reset.");
         }
+      } catch (error: any) {
+        console.error("Profile Page: Unexpected error in fetchProfile:", error);
+        toast.error(`Terjadi kesalahan: ${error.message}`);
+      } finally {
         setProfileLoading(false);
+        console.log("Profile Page: profileLoading set to false.");
       }
     };
 
