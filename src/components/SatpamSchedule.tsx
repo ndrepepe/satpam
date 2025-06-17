@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Table,
@@ -40,10 +40,17 @@ interface ScheduleEntry {
   locations: { name: string } | null;
 }
 
+// New interface for grouped schedules
+interface GroupedScheduleEntry {
+  user_id: string;
+  schedule_date: string;
+  profileName: string;
+}
+
 const SatpamSchedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [satpamList, setSatpamList] = useState<SatpamProfile[]>([]);
-  const [locationList, setLocationList] = useState<Location[]>([]); // Tetap diperlukan untuk iterasi
+  const [locationList, setLocationList] = useState<Location[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -51,7 +58,6 @@ const SatpamSchedule: React.FC = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      // Fetch Satpam personnel
       const { data: satpamData, error: satpamError } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, role')
@@ -60,7 +66,6 @@ const SatpamSchedule: React.FC = () => {
       if (satpamError) throw satpamError;
       setSatpamList(satpamData);
 
-      // Fetch Locations (still needed to assign satpam to all locations)
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
         .select('id, name');
@@ -111,9 +116,25 @@ const SatpamSchedule: React.FC = () => {
     if (selectedDate) {
       fetchSchedules(selectedDate);
     } else {
-      setSchedules([]); // Clear schedules if no date is selected
+      setSchedules([]);
     }
   }, [selectedDate]);
+
+  // Memoized grouped schedules for display
+  const groupedSchedules = useMemo(() => {
+    const grouped = new Map<string, GroupedScheduleEntry>();
+    schedules.forEach(schedule => {
+      const key = `${schedule.user_id}-${schedule.schedule_date}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          user_id: schedule.user_id,
+          schedule_date: schedule.schedule_date,
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
+        });
+      }
+    });
+    return Array.from(grouped.values());
+  }, [schedules]);
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId) {
@@ -129,14 +150,14 @@ const SatpamSchedule: React.FC = () => {
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       const schedulesToInsert = [];
-      const existingSchedulesForSatpam = schedules.filter(s => 
-        s.user_id === selectedSatpamId && 
-        format(new Date(s.schedule_date), 'yyyy-MM-dd') === formattedDate
+      const existingLocationIdsForSatpamOnDate = new Set(
+        schedules
+          .filter(s => s.user_id === selectedSatpamId && format(new Date(s.schedule_date), 'yyyy-MM-dd') === formattedDate)
+          .map(s => s.location_id)
       );
-      const existingLocationIdsForSatpam = new Set(existingSchedulesForSatpam.map(s => s.location_id));
 
       for (const location of locationList) {
-        if (!existingLocationIdsForSatpam.has(location.id)) {
+        if (!existingLocationIdsForSatpamOnDate.has(location.id)) {
           schedulesToInsert.push({
             schedule_date: formattedDate,
             user_id: selectedSatpamId,
@@ -160,7 +181,7 @@ const SatpamSchedule: React.FC = () => {
       toast.success("Jadwal berhasil ditambahkan untuk semua lokasi!");
       setSelectedSatpamId(undefined);
       if (selectedDate) {
-        fetchSchedules(selectedDate); // Refresh the list
+        fetchSchedules(selectedDate);
       }
     } catch (error: any) {
       toast.error(`Gagal menambahkan jadwal: ${error.message}`);
@@ -170,24 +191,25 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const handleDeleteSchedule = async (id: string) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus jadwal ini?")) {
+  const handleDeleteGroupedSchedule = async (userId: string, scheduleDate: string) => {
+    if (window.confirm(`Apakah Anda yakin ingin menghapus semua jadwal untuk personel ini pada tanggal ${format(new Date(scheduleDate), 'dd MMMM yyyy', { locale: idLocale })}?`)) {
       setLoading(true);
       try {
         const { error } = await supabase
           .from('schedules')
           .delete()
-          .eq('id', id);
+          .eq('user_id', userId)
+          .eq('schedule_date', scheduleDate);
 
         if (error) throw error;
 
-        toast.success("Jadwal berhasil dihapus.");
+        toast.success("Semua jadwal terkait berhasil dihapus.");
         if (selectedDate) {
-          fetchSchedules(selectedDate); // Refresh the list
+          fetchSchedules(selectedDate);
         }
       } catch (error: any) {
         toast.error(`Gagal menghapus jadwal: ${error.message}`);
-        console.error("Error deleting schedule:", error);
+        console.error("Error deleting grouped schedule:", error);
       } finally {
         setLoading(false);
       }
@@ -242,7 +264,6 @@ const SatpamSchedule: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            {/* Pilihan Lokasi dihapus karena satpam akan dijadwalkan untuk semua lokasi */}
           </div>
           <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>
             {loading ? "Menyimpan..." : "Simpan Jadwal untuk Semua Lokasi"}
@@ -255,7 +276,7 @@ const SatpamSchedule: React.FC = () => {
           <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
         </CardHeader>
         <CardContent>
-          {schedules.length === 0 ? (
+          {groupedSchedules.length === 0 ? (
             <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
           ) : (
             <Table>
@@ -268,16 +289,16 @@ const SatpamSchedule: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {schedules.map((schedule) => (
-                  <TableRow key={schedule.id}>
+                {groupedSchedules.map((schedule) => (
+                  <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A'}</TableCell>
-                    <TableCell>{schedule.locations ? schedule.locations.name : 'N/A'}</TableCell>
+                    <TableCell>{schedule.profileName}</TableCell>
+                    <TableCell>Semua Lokasi</TableCell> {/* Tampilkan 'Semua Lokasi' */}
                     <TableCell className="text-right">
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => handleDeleteSchedule(schedule.id)}
+                        onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
                         disabled={loading}
                       >
                         <Trash2 className="h-4 w-4" />
