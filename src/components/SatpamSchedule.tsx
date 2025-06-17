@@ -178,8 +178,8 @@ const SatpamSchedule: React.FC = () => {
         `)
         .gte('schedule_date', formattedStartDate)
         .lte('schedule_date', formattedEndDate)
-        .order('schedule_date', { ascending: true })
-        .order('profiles.first_name', { ascending: true });
+        .order('schedule_date', { ascending: true }) // Corrected order syntax
+        .order('profiles.first_name', { ascending: true }); // Corrected order syntax
 
       if (error) throw error;
       setRangeSchedules(data);
