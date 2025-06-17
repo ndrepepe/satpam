@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, supabaseAdmin } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client'; // Hanya import supabase
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ interface Profile {
   last_name: string;
   id_number?: string | null;
   role?: string;
-  email?: string; // Menambahkan properti email
+  email?: string;
 }
 
 interface PersonnelListProps {
@@ -33,41 +33,28 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
 
   const fetchPersonnel = async () => {
     setLoading(true);
-    // Mengambil data email dari auth.users melalui join atau dengan mengambil user_metadata
-    // Supabase RLS pada public.profiles tidak mengizinkan akses ke email secara langsung
-    // Kita perlu mengambil email dari auth.users secara terpisah atau melalui fungsi admin
-    // Untuk tujuan tampilan di admin dashboard, kita bisa mencoba mengambil dari auth.users
-    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+    try {
+      // Invoke Edge Function to list users with profiles
+      const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
 
-    if (usersError) {
-      console.error("Error fetching users for personnel list:", usersError);
-      toast.error("Gagal memuat daftar personel (data pengguna).");
+      if (error) {
+        console.error("Error invoking list-users-with-profiles Edge Function:", error);
+        throw new Error(`Edge Function error: ${error.message}`);
+      }
+
+      if (data && data.personnel) {
+        setPersonnel(data.personnel);
+      } else if (data && data.error) {
+        throw new Error(`Edge Function returned error: ${data.error}`);
+      } else {
+        throw new Error("Unexpected response from list-users-with-profiles Edge Function.");
+      }
+    } catch (error: any) {
+      toast.error(`Gagal memuat daftar personel: ${error.message}`);
+      console.error("Error fetching personnel:", error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name, id_number, role');
-
-    if (profilesError) {
-      console.error("Error fetching profiles:", profilesError);
-      toast.error("Gagal memuat daftar personel (data profil).");
-      setLoading(false);
-      return;
-    }
-
-    if (profilesData && usersData) {
-      const combinedPersonnel = profilesData.map(profile => {
-        const user = usersData.users.find(u => u.id === profile.id);
-        return {
-          ...profile,
-          email: user?.email || 'N/A', // Menambahkan email dari data pengguna
-        };
-      });
-      setPersonnel(combinedPersonnel);
-    }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -81,14 +68,22 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
     }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+        // Invoke Edge Function to delete user and profile
+        const { data, error } = await supabase.functions.invoke('delete-user-and-profile', {
+          body: { userId: id },
+        });
 
-        if (authError) {
-          throw authError;
+        if (error) {
+          console.error("Error invoking delete-user-and-profile Edge Function:", error);
+          throw new Error(`Edge Function error: ${error.message}`);
+        }
+
+        if (data && data.error) {
+          throw new Error(`Edge Function returned error: ${data.error}`);
         }
 
         toast.success(`Personel "${name}" berhasil dihapus.`);
-        fetchPersonnel();
+        fetchPersonnel(); // Refresh the list after deletion
       } catch (error: any) {
         toast.error(`Gagal menghapus personel: ${error.message}`);
         console.error("Error deleting personnel:", error);
@@ -127,7 +122,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
             <TableHead>Nama Depan</TableHead>
             <TableHead>Nama Belakang</TableHead>
             <TableHead>Nomor ID</TableHead>
-            <TableHead>Email</TableHead> {/* Kolom baru untuk Email */}
+            <TableHead>Email</TableHead>
             <TableHead>Peran</TableHead>
             {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
           </TableRow>
@@ -138,7 +133,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
               <TableCell className="font-medium">{p.first_name}</TableCell>
               <TableCell>{p.last_name}</TableCell>
               <TableCell>{p.id_number || '-'}</TableCell>
-              <TableCell>{p.email || '-'}</TableCell> {/* Menampilkan Email */}
+              <TableCell>{p.email || '-'}</TableCell>
               <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
               {isAdmin && (
                 <TableCell className="text-right">
