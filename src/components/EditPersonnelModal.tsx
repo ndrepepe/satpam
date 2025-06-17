@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { supabase, supabaseAdmin } from '@/integrations/supabase/client'; // Import supabaseAdmin
+import { supabase } from '@/integrations/supabase/client'; // Hanya import supabase, bukan supabaseAdmin
 
 const editPersonnelSchema = z.object({
   first_name: z.string().min(1, "Nama depan wajib diisi"),
@@ -55,7 +55,7 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
     console.log("New values to send:", values);
 
     try {
-      // Update public.profiles table
+      // 1. Update public.profiles table
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -67,25 +67,26 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
 
       if (profileError) {
         console.error("Supabase profile update error:", profileError);
-        throw profileError; // Throw to be caught by the outer catch
+        throw profileError;
       }
 
-      // Update auth.users metadata using supabaseAdmin
-      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUser(personnel.id, {
-        data: {
-          first_name: values.first_name,
-          last_name: values.last_name,
-          // Supabase often derives display_name from first_name/last_name in metadata.
-          // If not, you might explicitly set display_name here:
-          // display_name: `${values.first_name} ${values.last_name}`,
+      // 2. Invoke Edge Function to update auth.users metadata securely
+      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('update-user-metadata', {
+        body: {
+          userId: personnel.id,
+          firstName: values.first_name,
+          lastName: values.last_name,
         },
       });
 
-      if (authUpdateError) {
-        console.error("Supabase auth.users metadata update error:", authUpdateError);
-        // Decide if this error should prevent the profile update success toast.
-        // For now, we'll treat it as a critical error for full synchronization.
-        throw authUpdateError;
+      if (edgeFunctionError) {
+        console.error("Edge Function invocation error:", edgeFunctionError);
+        throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
+      }
+      
+      if (edgeFunctionData && edgeFunctionData.error) {
+        console.error("Edge Function returned an error:", edgeFunctionData.error);
+        throw new Error(`Edge Function returned error: ${edgeFunctionData.error}`);
       }
 
       console.log("Supabase update successful (no error returned).");
