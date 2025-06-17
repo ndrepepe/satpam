@@ -37,6 +37,7 @@ serve(async (req) => {
       data: {
         first_name: firstName,
         last_name: lastName,
+        display_name: `${firstName} ${lastName}`, // Menambahkan display_name secara eksplisit
       },
     });
 
