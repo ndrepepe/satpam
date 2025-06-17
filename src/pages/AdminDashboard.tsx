@@ -8,6 +8,7 @@ import PersonnelForm from '@/components/PersonnelForm';
 import PersonnelList from '@/components/PersonnelList';
 import LocationForm from '@/components/LocationForm';
 import LocationList from '@/components/LocationList';
+import SatpamSchedule from '@/components/SatpamSchedule'; // Import komponen baru
 import { toast } from 'sonner';
 
 const AdminDashboard = () => {
@@ -15,7 +16,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [locationListRefreshKey, setLocationListRefreshKey] = useState(0); // State baru
+  const [locationListRefreshKey, setLocationListRefreshKey] = useState(0);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -68,15 +69,16 @@ const AdminDashboard = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <Card className="max-w-3xl mx-auto mt-8">
+      <Card className="max-w-5xl mx-auto mt-8"> {/* Lebarkan Card untuk menampung 3 tab */}
         <CardHeader>
           <CardTitle className="text-center">Dashboard Admin</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3"> {/* Ubah grid-cols-2 menjadi grid-cols-3 */}
               <TabsTrigger value="personnel">Kelola Personel</TabsTrigger>
               <TabsTrigger value="locations">Kelola Lokasi</TabsTrigger>
+              <TabsTrigger value="schedule">Penjadwalan Satpam</TabsTrigger> {/* Tab baru */}
             </TabsList>
             <TabsContent value="personnel" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Tambah Personel Satpam Baru</h3>
@@ -85,8 +87,12 @@ const AdminDashboard = () => {
             </TabsContent>
             <TabsContent value="locations" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Buat Lokasi Baru</h3>
-              <LocationForm onLocationCreated={handleLocationCreated} /> {/* Meneruskan callback */}
-              <LocationList refreshKey={locationListRefreshKey} /> {/* Meneruskan refreshKey */}
+              <LocationForm onLocationCreated={handleLocationCreated} />
+              <LocationList refreshKey={locationListRefreshKey} />
+            </TabsContent>
+            <TabsContent value="schedule" className="mt-4"> {/* Konten untuk tab baru */}
+              <h3 className="text-xl font-semibold mb-4">Penjadwalan Satpam Cek Area</h3>
+              <SatpamSchedule />
             </TabsContent>
           </Tabs>
         </CardContent>
