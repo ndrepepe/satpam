@@ -176,38 +176,40 @@ const SatpamDashboard = () => {
               {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar."}
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nama Lokasi</TableHead>
-                  <TableHead>Status Cek Hari Ini</TableHead> {/* Kolom baru */}
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLocations.map((loc) => (
-                  <TableRow key={loc.id}>
-                    <TableCell className="font-medium">{loc.name}</TableCell>
-                    <TableCell>
-                      {loc.isCheckedToday ? (
-                        <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
-                      ) : (
-                        <Badge variant="destructive">Belum Dicek</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        onClick={() => handleScanLocation(loc.id)}
-                        disabled={loc.isCheckedToday} // Nonaktifkan tombol jika sudah dicek
-                      >
-                        {loc.isCheckedToday ? "Sudah Dicek" : "Pindai Lokasi"}
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto"> {/* Tambahkan ini untuk responsivitas tabel */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama Lokasi</TableHead>
+                    <TableHead>Status Cek Hari Ini</TableHead> {/* Kolom baru */}
+                    <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredLocations.map((loc) => (
+                    <TableRow key={loc.id}>
+                      <TableCell className="font-medium">{loc.name}</TableCell>
+                      <TableCell>
+                        {loc.isCheckedToday ? (
+                          <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
+                        ) : (
+                          <Badge variant="destructive">Belum Dicek</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          onClick={() => handleScanLocation(loc.id)}
+                          disabled={loc.isCheckedToday} // Nonaktifkan tombol jika sudah dicek
+                        >
+                          {loc.isCheckedToday ? "Sudah Dicek" : "Pindai Lokasi"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
