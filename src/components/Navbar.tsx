@@ -77,14 +77,17 @@ const Navbar = () => {
         <div className="space-x-4">
           {session ? (
             <>
-              <Link to="/profile" className="hover:underline">Profil</Link>
+              {/* Tautan Profil hanya ditampilkan jika bukan satpam atau atasan */}
+              {!isSatpam && !isSupervisor && (
+                <Link to="/profile" className="hover:underline">Profil</Link>
+              )}
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
               )}
               {isSatpam && (
                 <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
               )}
-              {isSupervisor && ( // Tautan baru untuk atasan
+              {isSupervisor && (
                 <Link to="/supervisor" className="hover:underline">Laporan</Link>
               )}
               <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
