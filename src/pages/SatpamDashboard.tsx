@@ -182,7 +182,7 @@ const SatpamDashboard = () => {
                   <TableRow>
                     <TableHead>Nama Lokasi</TableHead>
                     <TableHead>Status Cek Hari Ini</TableHead> {/* Kolom baru */}
-                    <TableHead className="text-right">Aksi</TableHead>
+                    <TableHead className="text-right w-[120px]">Aksi</TableHead> {/* Lebar disesuaikan */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -196,7 +196,7 @@ const SatpamDashboard = () => {
                           <Badge variant="destructive">Belum Dicek</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right w-[120px]"> {/* Lebar disesuaikan */}
                         <Button
                           size="sm"
                           onClick={() => handleScanLocation(loc.id)}
