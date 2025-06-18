@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.616.0"; // Reverted to 3.616.0
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.616.0";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -56,14 +56,15 @@ serve(async (req) => {
     // 2. Upload photo to Cloudflare R2
     console.log("Edge Function: Initializing S3Client for R2 upload...");
     const s3Client = new S3Client({
-      region: 'auto', // 'auto' is common for R2, or 'us-east-1'
+      region: 'us-east-1', // Changed from 'auto' to a specific region
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
-      // Explicitly disable default credential provider that might try to read files
       credentialDefaultProvider: () => Promise.resolve(null),
+      forcePathStyle: true, // Added this
+      sdkStreamMixin: false, // Added this
     });
 
     const timestamp = new Date().toISOString().replace(/[:.-]/g, ''); // Format timestamp for filename
