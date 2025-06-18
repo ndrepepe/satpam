@@ -82,6 +82,7 @@ const CheckAreaReport = () => {
       const fileName = `${uuidv4()}.${fileExtension}`;
       supabasePhotoFilePath = `${user.id}/${fileName}`; // Store in user's folder
 
+      console.log("Attempting to upload to Supabase Storage:", supabasePhotoFilePath);
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('check-area-photos')
         .upload(supabasePhotoFilePath, photoFile, {
@@ -90,8 +91,10 @@ const CheckAreaReport = () => {
         });
 
       if (uploadError) {
+        console.error("Error uploading to Supabase Storage:", uploadError);
         throw uploadError;
       }
+      console.log("Successfully uploaded to Supabase Storage:", uploadData);
 
       const { data: publicUrlData } = supabase.storage
         .from('check-area-photos')
@@ -101,8 +104,15 @@ const CheckAreaReport = () => {
         throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
       }
       supabasePhotoPublicUrl = publicUrlData.publicUrl;
+      console.log("Supabase Public URL:", supabasePhotoPublicUrl);
 
       // 2. Invoke Edge Function to move photo to R2 and get R2 URL
+      console.log("Invoking upload-to-r2 Edge Function with:", {
+        supabasePhotoUrl: supabasePhotoPublicUrl,
+        userId: user.id,
+        locationName: locationName,
+        supabaseFilePath: supabasePhotoFilePath,
+      });
       const { data: r2Data, error: r2Error } = await supabase.functions.invoke('upload-to-r2', {
         body: {
           supabasePhotoUrl: supabasePhotoPublicUrl,
@@ -118,15 +128,19 @@ const CheckAreaReport = () => {
       }
       
       if (r2Data && r2Data.error) {
+        console.error("Edge Function returned an error:", r2Data.error);
         throw new Error(`Edge Function returned error: ${r2Data.error}`);
       }
+      console.log("Edge Function response (r2Data):", r2Data);
 
       const r2PhotoUrl = r2Data?.r2Url;
       if (!r2PhotoUrl) {
         throw new Error("URL R2 tidak diterima dari Edge Function.");
       }
+      console.log("Final R2 Photo URL:", r2PhotoUrl);
 
       // 3. Save report to database with R2 URL
+      console.log("Attempting to insert report into database with R2 URL:", r2PhotoUrl);
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
@@ -136,8 +150,10 @@ const CheckAreaReport = () => {
         });
 
       if (insertError) {
+        console.error("Error inserting report into database:", insertError);
         throw insertError;
       }
+      console.log("Report successfully inserted into database.");
 
       toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Cloudflare R2!");
       navigate('/'); // Redirect to home or a success page
