@@ -180,16 +180,16 @@ const SatpamDashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nama Lokasi</TableHead>
-                    <TableHead className="w-[150px]">Status Cek Hari Ini</TableHead> {/* Lebar disesuaikan */}
+                    <TableHead className="text-center">Nama Lokasi</TableHead> {/* Teks rata tengah */}
+                    <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead> {/* Lebar disesuaikan dan rata tengah */}
                     <TableHead className="text-right w-[120px]">Aksi</TableHead> {/* Lebar disesuaikan */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLocations.map((loc) => (
                     <TableRow key={loc.id}>
-                      <TableCell className="font-medium">{loc.name}</TableCell>
-                      <TableCell className="w-[150px]"> {/* Lebar disesuaikan */}
+                      <TableCell className="font-medium text-center">{loc.name}</TableCell> {/* Teks rata tengah */}
+                      <TableCell className="w-[150px] text-center"> {/* Lebar disesuaikan dan rata tengah */}
                         {loc.isCheckedToday ? (
                           <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
                         ) : (
