@@ -59,6 +59,7 @@ const CheckAreaReport = () => {
       const file = event.target.files[0];
       setPhotoFile(file);
       setPhotoPreviewUrl(URL.createObjectURL(file));
+      console.log("Photo selected:", file.name, "Size:", file.size); // Log saat foto dipilih
     }
   };
 
@@ -67,8 +68,12 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
+    console.log("handleSubmitReport called."); // Log saat fungsi dipanggil
+    console.log("Current state - user:", !!user, "locationId:", locationId, "photoFile:", !!photoFile, "locationName:", locationName);
+
     if (!user || !locationId || !photoFile || !locationName) {
-      toast.error("Data laporan tidak lengkap.");
+      toast.error("Data laporan tidak lengkap. Pastikan Anda sudah mengambil foto dan lokasi terdeteksi.");
+      console.error("Missing data for report submission:", { user: !!user, locationId, photoFile: !!photoFile, locationName });
       return;
     }
 
@@ -94,7 +99,7 @@ const CheckAreaReport = () => {
         console.error("Error uploading to Supabase Storage:", uploadError);
         throw uploadError;
       }
-      console.log("Successfully uploaded to Supabase Storage:", uploadData);
+      console.log("Successfully uploaded to Supabase Storage. Data:", uploadData);
 
       const { data: publicUrlData } = supabase.storage
         .from('check-area-photos')
@@ -111,7 +116,7 @@ const CheckAreaReport = () => {
         supabasePhotoUrl: supabasePhotoPublicUrl,
         userId: user.id,
         locationName: locationName,
-        supabaseFilePath: supabasePhotoFilePath,
+        supabaseFilePath: supabasePhotoFilePath, // Pass original path for deletion
       });
       const { data: r2Data, error: r2Error } = await supabase.functions.invoke('upload-to-r2', {
         body: {
@@ -159,9 +164,10 @@ const CheckAreaReport = () => {
       navigate('/'); // Redirect to home or a success page
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
-      console.error("Error submitting report:", error);
+      console.error("Error submitting report (catch block):", error);
     } finally {
       setLoading(false);
+      console.log("Loading set to false.");
     }
   };
 
