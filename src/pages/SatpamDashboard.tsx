@@ -88,7 +88,7 @@ const SatpamDashboard = () => {
         let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
         startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
 
-        // If the current GMT+7 time is before 06:00 AM GMT+7,
+        // If the current GMT7 time is before 06:00 AM GMT+7,
         // then the "checking day" actually started at 06:00 AM GMT+7 on the *previous* calendar day.
         if (currentGMT7Date.getHours() < 6) {
           startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
@@ -180,23 +180,23 @@ const SatpamDashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-center">Nama Lokasi</TableHead> {/* Teks rata tengah */}
-                    <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead> {/* Lebar disesuaikan dan rata tengah */}
-                    <TableHead className="text-right w-[120px]">Aksi</TableHead> {/* Lebar disesuaikan */}
+                    <TableHead className="text-center">Nama Lokasi</TableHead>
+                    <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
+                    <TableHead className="text-center w-[120px]">Aksi</TableHead> {/* Diubah menjadi rata tengah */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLocations.map((loc) => (
                     <TableRow key={loc.id}>
-                      <TableCell className="font-medium text-center">{loc.name}</TableCell> {/* Teks rata tengah */}
-                      <TableCell className="w-[150px] text-center"> {/* Lebar disesuaikan dan rata tengah */}
+                      <TableCell className="font-medium text-center">{loc.name}</TableCell>
+                      <TableCell className="w-[150px] text-center">
                         {loc.isCheckedToday ? (
                           <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
                         ) : (
                           <Badge variant="destructive">Belum Dicek</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right w-[120px]"> {/* Lebar disesuaikan */}
+                      <TableCell className="text-center w-[120px]"> {/* Diubah menjadi rata tengah */}
                         <Button
                           size="sm"
                           onClick={() => handleScanLocation(loc.id)}
