@@ -181,7 +181,7 @@ const SatpamDashboard = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama Lokasi</TableHead>
-                    <TableHead>Status Cek Hari Ini</TableHead> {/* Kolom baru */}
+                    <TableHead className="w-[150px]">Status Cek Hari Ini</TableHead> {/* Lebar disesuaikan */}
                     <TableHead className="text-right w-[120px]">Aksi</TableHead> {/* Lebar disesuaikan */}
                   </TableRow>
                 </TableHeader>
@@ -189,7 +189,7 @@ const SatpamDashboard = () => {
                   {filteredLocations.map((loc) => (
                     <TableRow key={loc.id}>
                       <TableCell className="font-medium">{loc.name}</TableCell>
-                      <TableCell>
+                      <TableCell className="w-[150px]"> {/* Lebar disesuaikan */}
                         {loc.isCheckedToday ? (
                           <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
                         ) : (
