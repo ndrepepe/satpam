@@ -67,21 +67,24 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
-    if (!user || !locationId || !photoFile) {
+    if (!user || !locationId || !photoFile || !locationName) {
       toast.error("Data laporan tidak lengkap.");
       return;
     }
 
     setLoading(true);
+    let supabasePhotoPublicUrl: string | null = null;
+    let supabasePhotoFilePath: string | null = null;
+
     try {
-      // 1. Upload photo to Supabase Storage
+      // 1. Upload photo to Supabase Storage temporarily
       const fileExtension = photoFile.name.split('.').pop();
       const fileName = `${uuidv4()}.${fileExtension}`;
-      const filePath = `${user.id}/${fileName}`; // Store in user's folder
+      supabasePhotoFilePath = `${user.id}/${fileName}`; // Store in user's folder
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('check-area-photos')
-        .upload(filePath, photoFile, {
+        .upload(supabasePhotoFilePath, photoFile, {
           cacheControl: '3600',
           upsert: false,
         });
@@ -92,26 +95,51 @@ const CheckAreaReport = () => {
 
       const { data: publicUrlData } = supabase.storage
         .from('check-area-photos')
-        .getPublicUrl(filePath);
+        .getPublicUrl(supabasePhotoFilePath);
 
       if (!publicUrlData?.publicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto.");
+        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
+      }
+      supabasePhotoPublicUrl = publicUrlData.publicUrl;
+
+      // 2. Invoke Edge Function to move photo to R2 and get R2 URL
+      const { data: r2Data, error: r2Error } = await supabase.functions.invoke('upload-to-r2', {
+        body: {
+          supabasePhotoUrl: supabasePhotoPublicUrl,
+          userId: user.id,
+          locationName: locationName,
+          supabaseFilePath: supabasePhotoFilePath, // Pass original path for deletion
+        },
+      });
+
+      if (r2Error) {
+        console.error("Error invoking upload-to-r2 Edge Function:", r2Error);
+        throw new Error(`Gagal memindahkan foto ke R2: ${r2Error.message}`);
+      }
+      
+      if (r2Data && r2Data.error) {
+        throw new Error(`Edge Function returned error: ${r2Data.error}`);
       }
 
-      // 2. Save report to database
+      const r2PhotoUrl = r2Data?.r2Url;
+      if (!r2PhotoUrl) {
+        throw new Error("URL R2 tidak diterima dari Edge Function.");
+      }
+
+      // 3. Save report to database with R2 URL
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: publicUrlData.publicUrl,
+          photo_url: r2PhotoUrl, // Save the R2 URL
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Cloudflare R2!");
       navigate('/'); // Redirect to home or a success page
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
