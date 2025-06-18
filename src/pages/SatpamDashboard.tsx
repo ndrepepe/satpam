@@ -202,7 +202,7 @@ const SatpamDashboard = () => {
                           onClick={() => handleScanLocation(loc.id)}
                           disabled={loc.isCheckedToday} // Nonaktifkan tombol jika sudah dicek
                         >
-                          {loc.isCheckedToday ? "Sudah Dicek" : "Pindai Lokasi"}
+                          {loc.isCheckedToday ? "Sudah Dicek" : "Cek Lokasi"}
                         </Button>
                       </TableCell>
                     </TableRow>
