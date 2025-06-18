@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge'; // Import Badge component
+import { Input } from '@/components/ui/input'; // Import Input component
 
 interface Location {
   id: string;
@@ -34,6 +35,7 @@ const SatpamDashboard = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [isSatpam, setIsSatpam] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // State baru untuk query pencarian
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -135,6 +137,11 @@ const SatpamDashboard = () => {
     navigate(`/scan-location?id=${locationId}`);
   };
 
+  // Filtered locations based on search query
+  const filteredLocations = locations.filter(loc =>
+    loc.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (sessionLoading || loadingLocations) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -155,8 +162,19 @@ const SatpamDashboard = () => {
         </CardHeader>
         <CardContent>
           <h3 className="text-xl font-semibold mb-4">Daftar Lokasi Cek Area</h3>
-          {locations.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-400">Belum ada lokasi yang terdaftar.</p>
+          <div className="mb-4">
+            <Input
+              type="text"
+              placeholder="Cari lokasi..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          {filteredLocations.length === 0 ? (
+            <p className="text-center text-gray-600 dark:text-gray-400">
+              {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar."}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -167,7 +185,7 @@ const SatpamDashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {locations.map((loc) => (
+                {filteredLocations.map((loc) => (
                   <TableRow key={loc.id}>
                     <TableCell className="font-medium">{loc.name}</TableCell>
                     <TableCell>
