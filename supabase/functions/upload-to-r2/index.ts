@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.616.0";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.500.0"; // Changed to 3.500.0
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -58,11 +58,10 @@ serve(async (req) => {
     const s3Client = new S3Client({
       region: 'us-east-1', // Specific region
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      // Use credentialProvider to explicitly provide credentials and bypass default chain
-      credentialProvider: async () => ({
+      credentials: { // Directly provide credentials
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
-      }),
+      },
       forcePathStyle: true,
       sdkStreamMixin: false,
     });
