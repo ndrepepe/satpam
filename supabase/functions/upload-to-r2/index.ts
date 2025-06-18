@@ -15,12 +15,11 @@ serve(async (req) => {
   try {
     const { supabasePhotoUrl, userId, locationName, supabaseFilePath } = await req.json();
 
-    if (!supabasePhotoUrl || !userId || !locationName || !supabaseFilePath) {
-      return new Response(JSON.stringify({ error: 'Missing required parameters: supabasePhotoUrl, userId, locationName, or supabaseFilePath' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      });
-    }
+    console.log("Edge Function: Received request to upload-to-r2");
+    console.log("Edge Function: supabasePhotoUrl:", supabasePhotoUrl);
+    console.log("Edge Function: userId:", userId);
+    console.log("Edge Function: locationName:", locationName);
+    console.log("Edge Function: supabaseFilePath:", supabaseFilePath);
 
     const CLOUDFLARE_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
     const R2_ACCESS_KEY_ID = Deno.env.get('R2_ACCESS_KEY_ID');
@@ -28,7 +27,13 @@ serve(async (req) => {
     const R2_BUCKET_NAME = 'satpam'; // Hardcoded bucket name as per user's request
     const R2_PUBLIC_URL_BASE = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}`;
 
+    console.log("Edge Function: CLOUDFLARE_ACCOUNT_ID:", CLOUDFLARE_ACCOUNT_ID ? 'Set' : 'Not Set');
+    console.log("Edge Function: R2_ACCESS_KEY_ID:", R2_ACCESS_KEY_ID ? 'Set' : 'Not Set');
+    console.log("Edge Function: R2_SECRET_ACCESS_KEY:", R2_SECRET_ACCESS_KEY ? 'Set' : 'Not Set');
+    console.log("Edge Function: R2_BUCKET_NAME:", R2_BUCKET_NAME);
+
     if (!CLOUDFLARE_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+      console.error("Edge Function Error: Cloudflare R2 credentials are not set as environment variables.");
       return new Response(JSON.stringify({ error: 'Cloudflare R2 credentials are not set as environment variables.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -36,15 +41,20 @@ serve(async (req) => {
     }
 
     // 1. Download photo from Supabase Storage
+    console.log("Edge Function: Attempting to download photo from Supabase Storage...");
     const response = await fetch(supabasePhotoUrl);
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Edge Function Error: Failed to download photo from Supabase Storage: ${response.statusText}. Response body: ${errorText}`);
       throw new Error(`Failed to download photo from Supabase Storage: ${response.statusText}`);
     }
     const photoBlob = await response.blob();
     const photoArrayBuffer = await photoBlob.arrayBuffer();
     const photoBuffer = new Uint8Array(photoArrayBuffer);
+    console.log("Edge Function: Photo downloaded successfully. Blob type:", photoBlob.type, "Size:", photoBlob.size);
 
     // 2. Upload photo to Cloudflare R2
+    console.log("Edge Function: Initializing S3Client for R2 upload...");
     const s3Client = new S3Client({
       region: 'auto',
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -64,12 +74,21 @@ serve(async (req) => {
       Body: photoBuffer,
       ContentType: photoBlob.type,
     };
+    console.log("Edge Function: R2 upload parameters:", uploadParams);
 
-    await s3Client.send(new PutObjectCommand(uploadParams));
+    try {
+      const uploadResult = await s3Client.send(new PutObjectCommand(uploadParams));
+      console.log("Edge Function: Photo uploaded to R2 successfully. Result:", uploadResult);
+    } catch (r2UploadError: any) {
+      console.error("Edge Function Error: Failed to upload photo to R2:", r2UploadError);
+      throw new Error(`Failed to upload photo to R2: ${r2UploadError.message}`);
+    }
 
     const r2PublicUrl = `${R2_PUBLIC_URL_BASE}/${r2Key}`;
+    console.log("Edge Function: R2 Public URL:", r2PublicUrl);
 
     // 3. Delete photo from Supabase Storage (using service role key for admin access)
+    console.log("Edge Function: Initializing Supabase Admin client for storage deletion...");
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -81,13 +100,16 @@ serve(async (req) => {
       }
     );
 
+    console.log("Edge Function: Attempting to delete photo from Supabase Storage:", supabaseFilePath);
     const { error: deleteError } = await supabaseAdmin.storage
       .from('check-area-photos')
       .remove([supabaseFilePath]);
 
     if (deleteError) {
-      console.warn("Warning: Failed to delete photo from Supabase Storage:", deleteError.message);
+      console.warn("Edge Function Warning: Failed to delete photo from Supabase Storage:", deleteError.message);
       // Do not throw error here, as R2 upload was successful
+    } else {
+      console.log("Edge Function: Photo deleted from Supabase Storage successfully.");
     }
 
     return new Response(JSON.stringify({ r2Url: r2PublicUrl }), {
@@ -95,8 +117,8 @@ serve(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
-    console.error("Edge Function error:", error);
+  } catch (error: any) {
+    console.error("Edge Function Critical Error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
