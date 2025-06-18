@@ -72,9 +72,11 @@ const Navbar = () => {
 
   return (
     <nav className="bg-primary text-primary-foreground p-4 shadow-md">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold">Aplikasi Satpam</Link>
-        <div className="space-x-4">
+      <div className="container mx-auto flex items-center">
+        {/* Placeholder for left alignment if needed, currently empty */}
+        <div className="flex-grow-0 w-1/3"></div> 
+        <Link to="/" className="text-2xl font-bold text-center flex-grow">Aplikasi Satpam</Link>
+        <div className="space-x-4 flex-grow-0 w-1/3 flex justify-end">
           {session ? (
             <>
               {/* Tautan Profil hanya ditampilkan jika bukan satpam atau atasan */}
