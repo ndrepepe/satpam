@@ -84,10 +84,6 @@ const Navbar = () => {
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
               )}
-              {/* Tautan Cek Area hanya ditampilkan jika bukan satpam (karena tombolnya ada di halaman profil) */}
-              {isSatpam && (
-                <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
-              )}
               {isSupervisor && (
                 <Link to="/supervisor" className="hover:underline">Laporan</Link>
               )}
