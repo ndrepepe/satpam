@@ -161,7 +161,7 @@ const SatpamDashboard = () => {
           <CardTitle className="text-center">Dashboard Satpam</CardTitle>
         </CardHeader>
         <CardContent>
-          <h3 className="text-xl font-semibold mb-4">Daftar Lokasi Cek Area</h3>
+          <h3 className="text-xl font-semibold mb-4 text-center">Daftar Lokasi Cek Area</h3> {/* Ditambahkan text-center */}
           <div className="mb-4">
             <Input
               type="text"
@@ -182,7 +182,7 @@ const SatpamDashboard = () => {
                   <TableRow>
                     <TableHead className="text-center">Nama Lokasi</TableHead>
                     <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
-                    <TableHead className="text-center w-[120px]">Aksi</TableHead> {/* Diubah menjadi rata tengah */}
+                    <TableHead className="text-center w-[120px]">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -196,7 +196,7 @@ const SatpamDashboard = () => {
                           <Badge variant="destructive">Belum Dicek</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-center w-[120px]"> {/* Diubah menjadi rata tengah */}
+                      <TableCell className="text-center w-[120px]">
                         <Button
                           size="sm"
                           onClick={() => handleScanLocation(loc.id)}
