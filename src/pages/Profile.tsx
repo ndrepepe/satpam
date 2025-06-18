@@ -21,7 +21,7 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 const Profile = () => {
-  const { session, loading } = useSession();
+  const { session, loading, user } = useSession();
   const navigate = useNavigate();
   const [profileLoading, setProfileLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileFormValues & { role?: string } | null>(null);
@@ -152,6 +152,25 @@ const Profile = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        if (error.message === 'Auth session missing!') {
+          console.warn("Logout attempted but session was already missing. SessionContext should handle navigation.");
+          toast.success("Anda telah berhasil logout.");
+        } else {
+          throw error;
+        }
+      } else {
+        toast.success("Berhasil logout!");
+      }
+    } catch (error: any) {
+      toast.error(`Gagal logout: ${error.message}`);
+      console.error("Error logging out:", error);
+    }
+  };
+
   if (loading || profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -162,6 +181,29 @@ const Profile = () => {
 
   if (!session) {
     return null; // Akan dialihkan oleh useEffect
+  }
+
+  if (isSatpam) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+        <Card className="w-full max-w-md mx-auto text-center">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">Selamat Datang, Satpam!</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-lg text-gray-700 dark:text-gray-300">
+              Anda telah berhasil login sebagai {profile?.first_name} {profile?.last_name}.
+            </p>
+            <Button onClick={() => navigate('/satpam-dashboard')} className="w-full">
+              Cek Area
+            </Button>
+            <Button onClick={handleLogout} variant="outline" className="w-full">
+              Logout
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

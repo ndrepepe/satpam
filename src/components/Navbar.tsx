@@ -84,15 +84,19 @@ const Navbar = () => {
               {isAdmin && (
                 <Link to="/admin" className="hover:underline">Admin</Link>
               )}
+              {/* Tautan Cek Area hanya ditampilkan jika bukan satpam (karena tombolnya ada di halaman profil) */}
               {isSatpam && (
                 <Link to="/satpam-dashboard" className="hover:underline">Cek Area</Link>
               )}
               {isSupervisor && (
                 <Link to="/supervisor" className="hover:underline">Laporan</Link>
               )}
-              <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
-                Logout
-              </Button>
+              {/* Tombol Logout hanya ditampilkan jika bukan satpam (karena tombolnya ada di halaman profil) */}
+              {!isSatpam && (
+                <Button onClick={handleLogout} variant="secondary" className="bg-red-500 hover:bg-red-600 text-white">
+                  Logout
+                </Button>
+              )}
             </>
           ) : (
             <Link to="/login" className="hover:underline">Login</Link>
