@@ -72,11 +72,20 @@ const Navbar = () => {
 
   return (
     <nav className="bg-primary text-primary-foreground p-4 shadow-md">
-      <div className="container mx-auto flex items-center">
-        {/* Placeholder for left alignment if needed, currently empty */}
-        <div className="flex-grow-0 w-1/3"></div> 
-        <Link to="/" className="text-2xl font-bold text-center flex-grow">Aplikasi Satpam</Link>
-        <div className="space-x-4 flex-grow-0 w-1/3 flex justify-end">
+      <div className="container mx-auto flex justify-between items-center relative">
+        {/* Left content - flex-grow to push center item */}
+        <div className="flex-grow"></div> 
+        
+        {/* Centered Title - absolute positioning */}
+        <Link 
+          to="/" 
+          className="absolute left-1/2 -translate-x-1/2 text-2xl font-bold whitespace-nowrap"
+        >
+          Aplikasi Satpam
+        </Link>
+        
+        {/* Right content - flex-grow and justify-end to push content to the right */}
+        <div className="flex-grow flex justify-end space-x-4">
           {session ? (
             <>
               {/* Tautan Profil hanya ditampilkan jika bukan satpam atau atasan */}
