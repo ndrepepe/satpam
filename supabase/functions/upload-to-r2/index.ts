@@ -56,12 +56,14 @@ serve(async (req) => {
     // 2. Upload photo to Cloudflare R2
     console.log("Edge Function: Initializing S3Client for R2 upload...");
     const s3Client = new S3Client({
-      region: 'auto',
+      region: 'auto', // 'auto' is common for R2, or 'us-east-1'
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
+      // Explicitly disable default credential provider that might try to read files
+      credentialDefaultProvider: () => Promise.resolve(null),
     });
 
     const timestamp = new Date().toISOString().replace(/[:.-]/g, ''); // Format timestamp for filename
