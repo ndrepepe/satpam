@@ -4,7 +4,7 @@ import Navbar from '@/components/Navbar';
 import { Toaster } from '@/components/ui/sonner';
 import { SessionContextProvider } from '@/integrations/supabase/SessionContext';
 
-// Pages (regular imports)
+// Regular imports
 import Login from '@/pages/Login';
 import Profile from '@/pages/Profile';
 import AdminDashboard from '@/pages/AdminDashboard';
@@ -13,14 +13,14 @@ import SupervisorDashboard from '@/pages/SupervisorDashboard';
 import PrintQRCode from '@/pages/PrintQRCode';
 import NotFound from '@/pages/NotFound';
 
-// Lazy-loaded pages
+// Lazy-loaded components
 const CheckAreaReport = React.lazy(() => import('@/pages/CheckAreaReport'));
 const ScanLocation = React.lazy(() => import('@/pages/ScanLocation'));
 
 function App() {
   return (
-    <SessionContextProvider>
-      <Router>
+    <Router>
+      <SessionContextProvider>
         <div className="min-h-screen flex flex-col">
           <Navbar />
           <main className="flex-1">
@@ -41,9 +41,9 @@ function App() {
           </main>
         </div>
         <Toaster position="top-center" />
-      </Router>
-    </SessionContextProvider>
+      </SessionContextProvider>
+    </Router>
   );
 }
 
-export default App; // This is the crucial default export
+export default App;
