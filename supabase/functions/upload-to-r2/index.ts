@@ -55,17 +55,23 @@ serve(async (req) => {
 
     // 2. Upload photo to Cloudflare R2
     console.log("Edge Function: Initializing S3Client for R2 upload...");
+    
+    // Define a custom credential provider
+    const customCredentialProvider = async () => {
+      return {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      };
+    };
+
     const s3Client = new S3Client({
       region: 'us-east-1', // Specific region for Cloudflare R2
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: { // Provide credentials directly
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
-      },
+      credentials: customCredentialProvider, // Use the custom provider
       forcePathStyle: true,
       sdkStreamMixin: false,
     });
-    console.log("Edge Function: S3Client initialized.");
+    console.log("Edge Function: S3Client initialized with custom credentials.");
 
     const timestamp = new Date().toISOString().replace(/[:.-]/g, ''); // Format timestamp for filename
     const fileExtension = supabasePhotoUrl.split('.').pop();
