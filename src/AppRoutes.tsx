@@ -1,6 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
-import { Suspense } from 'react';
-import Layout from './components/Layout';
+import { Suspense, lazy } from 'react';
+import Layout from '@/components/Layout'; // Updated import path
 
 // Import komponen halaman
 const Home = lazy(() => import('@/pages/Home'));
