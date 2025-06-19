@@ -1,14 +1,14 @@
-import { BrowserRouter as Router } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import AppRoutes from './AppRoutes';
 import { SessionContextProvider } from '@/integrations/supabase/SessionContext';
 
 function App() {
   return (
-    <SessionContextProvider>
-      <Router>
+    <BrowserRouter>
+      <SessionContextProvider>
         <AppRoutes />
-      </Router>
-    </SessionContextProvider>
+      </SessionContextProvider>
+    </BrowserRouter>
   );
 }
 
