@@ -58,14 +58,22 @@ serve(async (req) => {
     const s3Client = new S3Client({
       region: 'us-east-1', // Specific region
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: { // Directly provide credentials
+      // Explicitly provide credentials and override the default credential provider chain
+      credentials: { 
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
-      credentialDefaultProvider: () => Promise.resolve(null), // Explicitly disable default credential chain
+      credentialDefaultProvider: async () => {
+        console.log("Edge Function: Using custom credentialDefaultProvider to ensure static credentials.");
+        return {
+          accessKeyId: R2_ACCESS_KEY_ID!, 
+          secretAccessKey: R2_SECRET_ACCESS_KEY!,
+        };
+      },
       forcePathStyle: true,
       sdkStreamMixin: false,
     });
+    console.log("Edge Function: S3Client initialized.");
 
     const timestamp = new Date().toISOString().replace(/[:.-]/g, ''); // Format timestamp for filename
     const fileExtension = supabasePhotoUrl.split('.').pop();
