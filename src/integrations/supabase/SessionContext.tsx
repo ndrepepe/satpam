@@ -52,7 +52,7 @@ export const SessionContextProvider: React.FC<{ children: React.ReactNode }> = (
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]); // Menghapus location.pathname dari dependensi
+  }, [navigate, location.pathname]); // Menambahkan location.pathname ke dependensi
 
   return (
     <SessionContext.Provider value={{ session, user, loading }}>
