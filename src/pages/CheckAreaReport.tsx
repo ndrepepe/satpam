@@ -7,74 +7,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 
-// Fungsi untuk mengkompresi gambar
-const compressImage = async (file: File): Promise<File> => {
-  const MAX_SIZE_MB = 3;
-  const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024; // 3 MB in bytes
-  const MIN_QUALITY = 0.1; // Minimum compression quality
-
-  // Jika ukuran file sudah di bawah batas, tidak perlu kompresi
-  if (file.size <= MAX_SIZE_BYTES) {
-    console.log("Image already within size limit, no compression needed.");
-    return file;
-  }
-
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          console.error("Could not get 2D context for canvas.");
-          resolve(file); // Fallback to original file
-          return;
-        }
-
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-
-        let quality = 0.9; // Mulai dengan kualitas tinggi
-        const mimeType = 'image/jpeg'; // Kompresi ke JPEG untuk ukuran yang lebih baik
-
-        const attemptCompression = () => {
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              console.error("Failed to create blob from canvas during compression.");
-              resolve(file); // Fallback to original file
-              return;
-            }
-
-            // Jika ukuran sudah sesuai atau kualitas sudah terlalu rendah
-            if (blob.size <= MAX_SIZE_BYTES || quality <= MIN_QUALITY) {
-              console.log(`Image compressed to ${(blob.size / (1024 * 1024)).toFixed(2)} MB with quality ${quality.toFixed(1)}`);
-              resolve(new File([blob], file.name, { type: mimeType, lastModified: Date.now() }));
-            } else {
-              quality -= 0.1; // Kurangi kualitas
-              if (quality < MIN_QUALITY) quality = MIN_QUALITY; // Pastikan tidak di bawah minimum
-              attemptCompression(); // Coba lagi
-            }
-          }, mimeType, quality);
-        };
-        attemptCompression();
-      };
-      img.onerror = (err) => {
-        console.error("Error loading image for compression:", err);
-        resolve(file); // Fallback to original file
-      };
-    };
-    reader.onerror = (err) => {
-      console.error("Error reading file for compression:", err);
-      resolve(file); // Fallback to original file
-    };
-  });
-};
-
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
   const locationId = searchParams.get('locationId');
@@ -122,23 +54,12 @@ const CheckAreaReport = () => {
     fetchLocation();
   }, [locationId, navigate, user, sessionLoading]);
 
-  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      const originalFile = event.target.files[0];
-      console.log("Original photo selected:", originalFile.name, "Size:", (originalFile.size / (1024 * 1024)).toFixed(2), "MB");
-
-      // Kompres gambar sebelum disimpan
-      const compressedFile = await compressImage(originalFile);
-      setPhotoFile(compressedFile);
-      setPhotoPreviewUrl(URL.createObjectURL(compressedFile));
-      
-      const compressedSizeMB = (compressedFile.size / (1024 * 1024));
-      console.log("Compressed photo size:", compressedSizeMB.toFixed(2), "MB");
-      if (compressedSizeMB > 3.01) { // Sedikit toleransi untuk floating point
-        toast.warning(`Ukuran foto masih ${compressedSizeMB.toFixed(2)} MB setelah kompresi. Mungkin kualitas sudah terlalu rendah.`);
-      } else {
-        toast.success(`Foto berhasil dikompresi menjadi ${compressedSizeMB.toFixed(2)} MB.`);
-      }
+      const file = event.target.files[0];
+      setPhotoFile(file);
+      setPhotoPreviewUrl(URL.createObjectURL(file));
+      console.log("Photo selected:", file.name, "Size:", file.size); // Log saat foto dipilih
     }
   };
 
@@ -147,7 +68,7 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
-    console.log("handleSubmitReport called.");
+    console.log("handleSubmitReport called."); // Log saat fungsi dipanggil
     console.log("Current state - user:", !!user, "locationId:", locationId, "photoFile:", !!photoFile, "locationName:", locationName);
 
     if (!user || !locationId || !photoFile || !locationName) {
@@ -169,7 +90,7 @@ const CheckAreaReport = () => {
       console.log("Attempting to upload to Supabase Storage:", supabasePhotoFilePath);
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('check-area-photos')
-        .upload(supabasePhotoFilePath, photoFile, { // Gunakan photoFile yang sudah dikompresi
+        .upload(supabasePhotoFilePath, photoFile, {
           cacheControl: '3600',
           upsert: false,
         });
