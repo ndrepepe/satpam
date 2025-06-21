@@ -161,7 +161,7 @@ const CheckAreaReport = () => {
       console.log("Report successfully inserted into database.");
 
       toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Cloudflare R2!");
-      navigate('/satpam-dashboard', { state: { refresh: true } }); // Redirect to satpam dashboard and trigger refresh
+      navigate('/'); // Redirect to home or a success page
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
       console.error("Error submitting report (catch block):", error);
