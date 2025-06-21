@@ -52,18 +52,22 @@ async function getSigV4Headers(
 
   // 1. Create canonical request
   const hashedPayload = await sha256Hex(body);
+  
+  // FIX: Ensure headers are in lexicographical order
   const canonicalHeaders = [
+    `content-type:${contentType}`,
     `host:${urlObj.hostname}`,
     `x-amz-content-sha256:${hashedPayload}`,
     `x-amz-date:${amzDate}`,
-    `content-type:${contentType}`
   ].join('\n') + '\n';
   
-  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date;content-type';
+  // FIX: Ensure signedHeaders are in lexicographical order
+  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  
   const canonicalRequest = [
     method,
     urlObj.pathname,
-    '',
+    '', // Query string (empty for PUT)
     canonicalHeaders,
     signedHeaders,
     hashedPayload
