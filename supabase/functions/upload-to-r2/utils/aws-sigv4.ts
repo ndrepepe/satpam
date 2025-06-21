@@ -1,5 +1,5 @@
-import { createHash } from "https://esm.sh/@deno-std/hash@0.224.0/mod.ts"; // Menggunakan esm.sh untuk hash
-import { hmac } from "https://esm.sh/hmac@2.0.2"; // Menggunakan esm.sh untuk hmac
+import { createHash } from "https://deno.land/std@0.190.0/hash/mod.ts"; // Menggunakan versi Deno std yang diketahui kompatibel
+import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts"; // Menggunakan versi hmac yang diketahui kompatibel
 
 // Helper function to convert ArrayBuffer to hex string
 function bufferToHex(buffer: ArrayBuffer): string {
