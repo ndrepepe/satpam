@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.592.0"; // Menggunakan AWS SDK S3
+import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.592.0";
+import { fromStatic } from "https://esm.sh/@aws-sdk/credential-provider-static@3.592.0"; // Import fromStatic
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,10 +33,12 @@ serve(async (req) => {
     const s3Client = new S3Client({
       region: "auto", // Cloudflare R2 menggunakan region 'auto'
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
+      // Explicitly use a static credential provider to prevent file system access
+      credentials: fromStatic({
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
-      },
+      }),
+      forcePathStyle: true, // Often needed for R2 compatibility
     });
     console.log("Edge Function: S3Client initialized for R2.");
 
