@@ -72,14 +72,17 @@ const SatpamDashboard = () => {
         // Get current time in GMT+7
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
 
-        let targetScheduleDate = new Date(currentGMT7Time);
+        let startOfCheckingDayGMT7 = new Date(currentGMT7Time);
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
+
         // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
         if (currentGMT7Time.getHours() < 6) {
-          targetScheduleDate.setDate(targetScheduleDate.getDate() - 1);
+          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
         }
         
         // Format this target date to YYYY-MM-DD for the database query
-        const formattedTargetScheduleDate = format(targetScheduleDate, 'yyyy-MM-dd');
+        // FIX: Use startOfCheckingDayGMT7 instead of undefined targetScheduleDate
+        const formattedTargetScheduleDate = format(startOfCheckingDayGMT7, 'yyyy-MM-dd');
         console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
         // --- NEW: Check if the user is scheduled for today ---
