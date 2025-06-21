@@ -17,10 +17,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon } from 'lucide-react'; // Import CalendarIcon
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Import Popover components
-import { Calendar } from '@/components/ui/calendar'; // Import Calendar component
-import { cn } from '@/lib/utils'; // Import cn utility
+import { Calendar as CalendarIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 interface LocationWithStatus {
   id: string;
@@ -41,7 +41,7 @@ const SupervisorDashboard = () => {
   const [loadingReports, setLoadingReports] = useState(true);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date()); // State untuk tanggal yang dipilih
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -89,21 +89,12 @@ const SupervisorDashboard = () => {
           return;
         }
 
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
+        const offsetGMT7ToUTC = 7;
 
         let startOfCheckingDayGMT7 = new Date(selectedDate);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7 of the selected date
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
 
-        // If the selected date's time is before 06:00 AM GMT+7,
-        // then the "checking day" actually started at 06:00 AM GMT+7 on the *previous* calendar day.
-        // This logic is for the *current* time relative to the selected date, not the selected date itself.
-        // For filtering, we just need the 06:00 AM of the selected date.
-        // The previous logic was for SatpamDashboard to determine "today's" check based on current time.
-        // For Supervisor, we want reports *for* the selected date, starting 06:00 AM.
-
-        // Convert startOfCheckingDayGMT7 to UTC for the Supabase query
         const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
-        // The end of the checking day is 24 hours after its start
         const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
 
         // 3. Fetch reports for the selected "checking day"
@@ -118,7 +109,7 @@ const SupervisorDashboard = () => {
           `)
           .gte('created_at', startOfCheckingDayUTC.toISOString())
           .lt('created_at', endOfCheckingDayUTC.toISOString())
-          .order('created_at', { ascending: false }); // Order to get the latest report if multiple
+          .order('created_at', { ascending: false });
 
         if (reportsTodayError) {
           console.error("Error fetching reports for selected date:", reportsTodayError);
@@ -130,7 +121,6 @@ const SupervisorDashboard = () => {
         // 4. Process and combine data
         const reportsMap = new Map<string, { reporter: string; time: string; photo: string }>();
         reportsTodayData.forEach(report => {
-          // Only store the latest report for each location if multiple exist
           if (!reportsMap.has(report.location_id) || new Date(report.created_at) > new Date(reportsMap.get(report.location_id)!.time)) {
             reportsMap.set(report.location_id, {
               reporter: report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'N/A',
@@ -160,16 +150,17 @@ const SupervisorDashboard = () => {
     };
 
     checkUserRoleAndFetchReports();
-  }, [session, sessionLoading, user, navigate, selectedDate]); // Tambahkan selectedDate sebagai dependensi
+  }, [session, sessionLoading, user, navigate, selectedDate]);
 
   const handleViewPhoto = (url: string) => {
+    console.log("Attempting to view photo with URL:", url); // LOG INI
     setSelectedPhotoUrl(url);
     setIsPhotoModalOpen(true);
   };
 
   const handleClosePhotoModal = () => {
-    setIsPhotoModalOpen(false);
     setSelectedPhotoUrl(null);
+    setIsPhotoModalOpen(false);
   };
 
   if (sessionLoading || loadingReports) {
@@ -181,7 +172,7 @@ const SupervisorDashboard = () => {
   }
 
   if (!isSupervisor) {
-    return null; // Akan dialihkan oleh useEffect jika bukan atasan
+    return null;
   }
 
   return (
@@ -272,8 +263,10 @@ const SupervisorDashboard = () => {
             <DialogTitle>Foto Laporan</DialogTitle>
           </DialogHeader>
           <div className="flex justify-center items-center p-4">
-            {selectedPhotoUrl && (
+            {selectedPhotoUrl ? ( // Periksa apakah selectedPhotoUrl ada sebelum merender img
               <img src={selectedPhotoUrl} alt="Laporan Cek Area" className="max-w-full h-auto rounded-md" />
+            ) : (
+              <p>Tidak ada foto untuk ditampilkan.</p> // Pesan jika URL foto kosong
             )}
           </div>
         </DialogContent>
