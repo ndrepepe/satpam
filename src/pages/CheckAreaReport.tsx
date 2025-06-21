@@ -59,7 +59,7 @@ const CheckAreaReport = () => {
       const file = event.target.files[0];
       setPhotoFile(file);
       setPhotoPreviewUrl(URL.createObjectURL(file));
-      console.log("Photo selected:", file.name, "Size:", file.size); // Log saat foto dipilih
+      console.log("Photo selected:", file.name, "Size:", file.size);
     }
   };
 
@@ -68,7 +68,7 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
-    console.log("handleSubmitReport called."); // Log saat fungsi dipanggil
+    console.log("handleSubmitReport called.");
     console.log("Current state - user:", !!user, "locationId:", locationId, "photoFile:", !!photoFile, "locationName:", locationName);
 
     if (!user || !locationId || !photoFile || !locationName) {
@@ -142,7 +142,7 @@ const CheckAreaReport = () => {
       if (!r2PhotoUrl) {
         throw new Error("URL R2 tidak diterima dari Edge Function.");
       }
-      console.log("Final R2 Photo URL:", r2PhotoUrl);
+      console.log("Final R2 Photo URL to be saved in DB:", r2PhotoUrl); // LOG PENTING INI
 
       // 3. Save report to database with R2 URL
       console.log("Attempting to insert report into database with R2 URL:", r2PhotoUrl);
@@ -161,7 +161,7 @@ const CheckAreaReport = () => {
       console.log("Report successfully inserted into database.");
 
       toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Cloudflare R2!");
-      navigate('/'); // Redirect to home or a success page
+      navigate('/satpam-dashboard'); // Redirect to satpam dashboard
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
       console.error("Error submitting report (catch block):", error);
@@ -222,7 +222,7 @@ const CheckAreaReport = () => {
           >
             {loading ? "Mengirim Laporan..." : "Kirim Laporan"}
           </Button>
-          <Button onClick={() => navigate('/')} variant="outline" className="w-full">
+          <Button onClick={() => navigate('/satpam-dashboard')} variant="outline" className="w-full">
             Batal
           </Button>
         </CardContent>
