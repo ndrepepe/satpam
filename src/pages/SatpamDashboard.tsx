@@ -79,6 +79,7 @@ const SatpamDashboard = () => {
         const now = new Date();
         const offsetGMT7ToUTC = 7; 
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
+        console.log("DEBUG: Current GMT+7 Time:", currentGMT7Time.toISOString());
 
         let startOfCheckingDayGMT7 = new Date(currentGMT7Time);
         startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
@@ -88,7 +89,8 @@ const SatpamDashboard = () => {
         }
         
         const formattedTargetScheduleDate = format(startOfCheckingDayGMT7, 'yyyy-MM-dd');
-        console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
+        console.log("DEBUG: Calculated startOfCheckingDayGMT7 (for schedule check):", startOfCheckingDayGMT7.toISOString());
+        console.log("DEBUG: Formatted target schedule date:", formattedTargetScheduleDate);
 
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
@@ -104,7 +106,7 @@ const SatpamDashboard = () => {
           return;
         }
 
-        console.log("SatpamDashboard: Schedule data for user", user.id, "on", formattedTargetScheduleDate, ":", scheduleData);
+        console.log("DEBUG: Schedule data for user", user.id, "on", formattedTargetScheduleDate, ":", scheduleData);
 
         if (!scheduleData || scheduleData.length === 0) {
           setIsScheduledToday(false);
@@ -125,9 +127,12 @@ const SatpamDashboard = () => {
           setLoadingLocations(false);
           return;
         }
+        console.log("DEBUG: All locations fetched:", locationsData);
 
         const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
         const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+        console.log("DEBUG: Report query range (UTC):", startOfCheckingDayUTC.toISOString(), "to", endOfCheckingDayUTC.toISOString());
+
 
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
@@ -142,20 +147,23 @@ const SatpamDashboard = () => {
           setLoadingLocations(false);
           return;
         }
+        console.log("DEBUG: Reports fetched for user and date range:", reportsData);
 
         const checkedLocationIds = new Set(reportsData?.map(report => report.location_id));
+        console.log("DEBUG: Checked Location IDs:", Array.from(checkedLocationIds));
 
         const locationsWithStatus = locationsData.map(loc => ({
           ...loc,
           isCheckedToday: checkedLocationIds.has(loc.id),
         }));
+        console.log("DEBUG: Final locationsWithStatus:", locationsWithStatus);
 
         setLocations(locationsWithStatus);
         setLoadingLocations(false);
       } else {
         toast.error("Akses ditolak. Anda bukan satpam.");
         navigate('/');
-        setLoadingLocations(false); // Ensure loading is false on unauthorized access
+        setLoadingLocations(false);
       }
     };
 
