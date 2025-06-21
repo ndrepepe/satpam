@@ -35,6 +35,7 @@ const SatpamDashboard = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [isSatpam, setIsSatpam] = useState(false);
+  const [isScheduledToday, setIsScheduledToday] = useState(false); // State baru untuk status jadwal
   const [searchQuery, setSearchQuery] = useState(''); // State baru untuk query pencarian
 
   useEffect(() => {
@@ -63,6 +64,46 @@ const SatpamDashboard = () => {
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
 
+        // Calculate the "checking day" based on 06:00 AM GMT+7
+        const now = new Date();
+        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
+
+        const currentGMT7Date = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
+
+        let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
+
+        if (currentGMT7Date.getHours() < 6) {
+          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
+        }
+
+        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
+        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+
+        // --- NEW: Check if the user is scheduled for today ---
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from('schedules')
+          .select('id')
+          .eq('user_id', user.id)
+          .gte('schedule_date', startOfCheckingDayUTC.toISOString().split('T')[0]) // Compare only date part
+          .lte('schedule_date', endOfCheckingDayUTC.toISOString().split('T')[0]) // Compare only date part
+          .limit(1); // Only need to know if at least one schedule exists
+
+        if (scheduleError) {
+          console.error("Error fetching schedule for user:", scheduleError);
+          toast.error("Gagal memuat jadwal Anda.");
+          setLoadingLocations(false);
+          return;
+        }
+
+        if (!scheduleData || scheduleData.length === 0) {
+          setIsScheduledToday(false);
+          setLoadingLocations(false);
+          toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
+          return; // Stop here if not scheduled
+        }
+        setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
+
         // Fetch locations
         const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
@@ -75,30 +116,6 @@ const SatpamDashboard = () => {
           setLoadingLocations(false);
           return;
         }
-
-        // Calculate the "checking day" based on 06:00 AM GMT+7
-        const now = new Date();
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
-
-        // Get the current date in GMT+7
-        // This is a simplified way to get the "current day" relative to GMT+7
-        // For more robust timezone handling, consider a library like `date-fns-tz`
-        const currentGMT7Date = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
-
-        let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
-
-        // If the current GMT7 time is before 06:00 AM GMT+7,
-        // then the "checking day" actually started at 06:00 AM GMT+7 on the *previous* calendar day.
-        if (currentGMT7Date.getHours() < 6) {
-          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
-        }
-
-        // Convert startOfCheckingDayGMT7 to UTC for the Supabase query
-        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
-
-        // The end of the checking day is 24 hours after its start
-        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
 
         // Fetch reports for the current user within the defined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
@@ -161,55 +178,63 @@ const SatpamDashboard = () => {
           <CardTitle className="text-center">Dashboard Satpam</CardTitle>
         </CardHeader>
         <CardContent>
-          <h3 className="text-xl font-semibold mb-4 text-center">Daftar Lokasi Cek Area</h3> {/* Ditambahkan text-center */}
-          <div className="mb-4">
-            <Input
-              type="text"
-              placeholder="Cari lokasi..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full"
-            />
-          </div>
-          {filteredLocations.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-400">
-              {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar."}
+          <h3 className="text-xl font-semibold mb-4 text-center">Daftar Lokasi Cek Area</h3>
+          {!isScheduledToday ? (
+            <p className="text-center text-lg text-red-500 dark:text-red-400">
+              Anda tidak memiliki jadwal tugas untuk hari ini.
             </p>
           ) : (
-            <div className="overflow-x-auto"> {/* Tambahkan ini untuk responsivitas tabel */}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center">Nama Lokasi</TableHead>
-                    <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
-                    <TableHead className="text-center w-[120px]">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLocations.map((loc) => (
-                    <TableRow key={loc.id}>
-                      <TableCell className="font-medium text-center">{loc.name}</TableCell>
-                      <TableCell className="w-[150px] text-center">
-                        {loc.isCheckedToday ? (
-                          <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
-                        ) : (
-                          <Badge variant="destructive">Belum Dicek</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center w-[120px]">
-                        <Button
-                          size="sm"
-                          onClick={() => handleScanLocation(loc.id)}
-                          disabled={loc.isCheckedToday} // Nonaktifkan tombol jika sudah dicek
-                        >
-                          {loc.isCheckedToday ? "Sudah Dicek" : "Cek Lokasi"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <div className="mb-4">
+                <Input
+                  type="text"
+                  placeholder="Cari lokasi..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              {filteredLocations.length === 0 ? (
+                <p className="text-center text-gray-600 dark:text-gray-400">
+                  {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-center">Nama Lokasi</TableHead>
+                        <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
+                        <TableHead className="text-center w-[120px]">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredLocations.map((loc) => (
+                        <TableRow key={loc.id}>
+                          <TableCell className="font-medium text-center">{loc.name}</TableCell>
+                          <TableCell className="w-[150px] text-center">
+                            {loc.isCheckedToday ? (
+                              <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
+                            ) : (
+                              <Badge variant="destructive">Belum Dicek</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center w-[120px]">
+                            <Button
+                              size="sm"
+                              onClick={() => handleScanLocation(loc.id)}
+                              disabled={loc.isCheckedToday}
+                            >
+                              {loc.isCheckedToday ? "Sudah Dicek" : "Cek Lokasi"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
