@@ -1,6 +1,3 @@
-import { createHash } from "https://deno.land/std@0.190.0/hash/mod.ts"; // Menggunakan versi Deno std yang diketahui kompatibel
-import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts"; // Menggunakan versi hmac yang diketahui kompatibel
-
 // Helper function to convert ArrayBuffer to hex string
 function bufferToHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
@@ -8,15 +5,46 @@ function bufferToHex(buffer: ArrayBuffer): string {
     .join('');
 }
 
-// Helper function to convert string to ArrayBuffer
-function strToBuffer(str: string): ArrayBuffer {
-  return new TextEncoder().encode(str).buffer;
+// Helper function to convert string to Uint8Array
+function strToUint8Array(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
 }
 
-// Helper function to sign a string with HMAC-SHA256
+// Helper function to sign a string with HMAC-SHA256 using Web Crypto API
 async function sign(key: ArrayBuffer, msg: string): Promise<ArrayBuffer> {
-  const signature = await hmac('sha256', key, strToBuffer(msg), 'arraybuffer');
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    key,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    strToUint8Array(msg)
+  );
   return signature;
+}
+
+// Helper function to create SHA256 hash using Web Crypto API
+async function sha256(data: string | ArrayBuffer | Uint8Array | Blob): Promise<string> {
+  let buffer: ArrayBuffer;
+  if (typeof data === 'string') {
+    buffer = strToUint8Array(data).buffer;
+  } else if (data instanceof Uint8Array) {
+    buffer = data.buffer;
+  } else if (data instanceof ArrayBuffer) {
+    buffer = data;
+  } else if (data instanceof Blob) {
+    buffer = await data.arrayBuffer();
+  } else {
+    throw new Error("Unsupported data type for hashing.");
+  }
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // AWS Signature Version 4 signing logic
@@ -63,18 +91,9 @@ export async function signAwsV4(
 
   let payloadHash = 'UNSIGNED-PAYLOAD';
   if (request.body) {
-    const hash = createHash('sha256');
-    if (typeof request.body === 'string') {
-      hash.update(request.body);
-    } else if (request.body instanceof Uint8Array || request.body instanceof ArrayBuffer) {
-      hash.update(request.body);
-    } else if (request.body instanceof Blob) {
-      const buffer = await request.body.arrayBuffer();
-      hash.update(new Uint8Array(buffer));
-    }
-    payloadHash = hash.toString();
+    payloadHash = await sha256(request.body);
   } else {
-    payloadHash = createHash('sha256').update('').toString(); // Empty string hash for no body
+    payloadHash = await sha256(''); // Empty string hash for no body
   }
 
   const canonicalRequest = [
@@ -93,11 +112,11 @@ export async function signAwsV4(
     algorithm,
     amzDate,
     credentialScope,
-    createHash('sha256').update(canonicalRequest).toString(),
+    await sha256(canonicalRequest),
   ].join('\n');
 
   // 3. Calculate the signature
-  const kSecret = strToBuffer(`AWS4${secretAccessKey}`);
+  const kSecret = strToUint8Array(`AWS4${secretAccessKey}`).buffer;
   const kDate = await sign(kSecret, dateStamp);
   const kRegion = await sign(kDate, region);
   const kService = await sign(kRegion, service);
