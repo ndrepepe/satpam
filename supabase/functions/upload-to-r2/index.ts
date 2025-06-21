@@ -102,6 +102,7 @@ serve(async (req) => {
 
   try {
     const { supabasePhotoUrl, userId, locationName, supabaseFilePath } = await req.json();
+    console.log("Edge Function: Received request for userId:", userId, "locationName:", locationName);
 
     // Validate environment variables
     const CLOUDFLARE_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
@@ -110,22 +111,31 @@ serve(async (req) => {
     const R2_BUCKET_NAME = 'satpam';
 
     if (!CLOUDFLARE_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+      console.error("Edge Function: Missing Cloudflare R2 credentials!");
       throw new Error('Missing Cloudflare R2 credentials');
     }
+    console.log("Edge Function: R2 credentials found.");
 
     // 1. Download photo from Supabase
+    console.log("Edge Function: Attempting to download photo from Supabase URL:", supabasePhotoUrl);
     const response = await fetch(supabasePhotoUrl);
-    if (!response.ok) throw new Error(`Failed to download photo: ${response.statusText}`);
+    if (!response.ok) {
+      console.error(`Edge Function: Failed to download photo from Supabase: ${response.statusText}`);
+      throw new Error(`Failed to download photo: ${response.statusText}`);
+    }
     
     const photoBlob = await response.blob();
     const photoBuffer = await photoBlob.arrayBuffer();
     const photoUint8Array = new Uint8Array(photoBuffer);
+    console.log("Edge Function: Photo downloaded successfully. Size:", photoUint8Array.length, "bytes.");
 
     // 2. Upload to R2
     const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
     const fileExtension = supabasePhotoUrl.split('.').pop();
     const r2Key = `${userId}/${locationName.replace(/\s/g, '_')}_${timestamp}.${fileExtension}`;
     const r2Url = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/${r2Key}`;
+    console.log("Edge Function: R2 Target URL:", r2Url);
+    console.log("Edge Function: R2 Key:", r2Key);
 
     const headers = await getSigV4Headers(
       'PUT',
@@ -135,16 +145,22 @@ serve(async (req) => {
       photoUint8Array,
       photoBlob.type
     );
+    console.log("Edge Function: Generated SigV4 Headers:", headers);
 
+    console.log("Edge Function: Attempting to upload to R2...");
     const uploadResponse = await fetch(r2Url, {
       method: 'PUT',
       headers,
       body: photoUint8Array,
     });
 
+    console.log(`Edge Function: R2 Upload Response Status: ${uploadResponse.status}`);
     if (!uploadResponse.ok) {
-      throw new Error(`R2 upload failed: ${uploadResponse.status}`);
+      const errorText = await uploadResponse.text();
+      console.error(`Edge Function: R2 upload failed with status ${uploadResponse.status}. Response body: ${errorText}`);
+      throw new Error(`R2 upload failed: ${uploadResponse.status} - ${errorText}`);
     }
+    console.log("Edge Function: Photo uploaded to R2 successfully.");
 
     // 3. Delete from Supabase Storage
     const supabaseAdmin = createClient(
@@ -152,10 +168,17 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-
-    await supabaseAdmin.storage
+    console.log("Edge Function: Attempting to delete photo from Supabase Storage path:", supabaseFilePath);
+    const { error: deleteError } = await supabaseAdmin.storage
       .from('check-area-photos')
       .remove([supabaseFilePath]);
+
+    if (deleteError) {
+      console.error("Edge Function: Error deleting from Supabase Storage:", deleteError);
+      // Don't throw, as the main task (upload to R2) was successful
+    } else {
+      console.log("Edge Function: Photo deleted from Supabase Storage successfully.");
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -165,6 +188,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
+    console.error("Edge Function: Caught error:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
