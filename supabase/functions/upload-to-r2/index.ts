@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.329.0";
+import { signAwsV4 } from '../utils/aws-sigv4.ts'; // Import utilitas penandatanganan
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,25 +21,13 @@ serve(async (req) => {
     const R2_ACCESS_KEY_ID = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET_ACCESS_KEY = Deno.env.get('R2_SECRET_ACCESS_KEY');
     const R2_BUCKET_NAME = 'satpam'; // Nama bucket R2 Anda
+    const R2_ENDPOINT = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
     if (!CLOUDFLARE_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
       console.error("Edge Function: Missing Cloudflare R2 credentials!");
       throw new Error('Missing Cloudflare R2 credentials');
     }
     console.log("Edge Function: R2 credentials found.");
-
-    // Inisialisasi S3 Client untuk Cloudflare R2
-    const s3Client = new S3Client({
-      region: "auto", // Cloudflare R2 menggunakan region 'auto'
-      endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      // Menggunakan credentialProvider kustom untuk memastikan hanya kredensial yang diberikan yang digunakan
-      credentialProvider: async () => ({
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
-      }),
-      forcePathStyle: true, // Often needed for R2 compatibility
-    });
-    console.log("Edge Function: S3Client initialized for R2.");
 
     // 1. Download photo from Supabase Storage
     console.log("Edge Function: Attempting to download photo from Supabase URL:", supabasePhotoUrl);
@@ -54,23 +42,45 @@ serve(async (req) => {
     const photoUint8Array = new Uint8Array(photoBuffer);
     console.log("Edge Function: Photo downloaded successfully. Size:", photoUint8Array.length, "bytes.");
 
-    // 2. Upload to R2 using AWS SDK
+    // 2. Upload to R2 using direct fetch with SigV4 signing
     const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
     const fileExtension = photoBlob.type.split('/').pop(); // Dapatkan ekstensi dari content-type
     const r2Key = `${userId}/${locationName.replace(/\s/g, '_')}_${timestamp}.${fileExtension}`;
-    
-    console.log("Edge Function: R2 Target Key:", r2Key);
+    const r2UploadUrl = `${R2_ENDPOINT}/${R2_BUCKET_NAME}/${r2Key}`;
 
-    const putObjectCommand = new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: r2Key,
-      Body: photoUint8Array,
-      ContentType: photoBlob.type, // Set content type
+    console.log("Edge Function: R2 Target Key:", r2Key);
+    console.log("Edge Function: R2 Upload URL:", r2UploadUrl);
+
+    const requestToSign = {
+      method: 'PUT',
+      url: r2UploadUrl,
+      headers: {
+        'Content-Type': photoBlob.type,
+      },
+      body: photoUint8Array,
+    };
+
+    const signedHeaders = await signAwsV4(
+      R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY,
+      'auto', // Cloudflare R2 uses 'auto' region
+      's3',   // Service name for S3 compatible APIs
+      requestToSign
+    );
+
+    console.log("Edge Function: Attempting to upload to R2 using signed fetch...");
+    const r2UploadResponse = await fetch(r2UploadUrl, {
+      method: 'PUT',
+      headers: signedHeaders,
+      body: photoUint8Array,
     });
 
-    console.log("Edge Function: Attempting to upload to R2 using AWS SDK...");
-    await s3Client.send(putObjectCommand);
-    console.log("Edge Function: Photo uploaded to R2 successfully using AWS SDK.");
+    if (!r2UploadResponse.ok) {
+      const errorText = await r2UploadResponse.text();
+      console.error(`Edge Function: Failed to upload to R2: ${r2UploadResponse.status} ${r2UploadResponse.statusText} - ${errorText}`);
+      throw new Error(`Failed to upload photo to R2: ${r2UploadResponse.statusText} - ${errorText}`);
+    }
+    console.log("Edge Function: Photo uploaded to R2 successfully using signed fetch.");
 
     // 3. Delete from Supabase Storage
     const supabaseAdmin = createClient(
