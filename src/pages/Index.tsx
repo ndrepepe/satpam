@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
-import { toast }s from 'sonner';
+import { toast } from 'sonner'; // Perbaikan: Menghapus 's' yang tidak perlu
 
 const Index = () => {
   const { session, loading: sessionLoading, user } = useSession();
