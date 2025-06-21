@@ -1,60 +1,41 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+import { Layout } from "./components/Layout";
+import { SessionProvider } from "./integrations/supabase/SessionContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import Profile from "./pages/Profile"; // Menggunakan Profile sebagai halaman default
-import NotFound from "./pages/NotFound";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
 import Login from "./pages/Login";
-import AdminDashboard from "./pages/AdminDashboard";
-import ScanLocation from "./pages/ScanLocation";
-import PrintQRCode from "./pages/PrintQRCode";
+import Dashboard from "./pages/Dashboard";
 import CheckAreaReport from "./pages/CheckAreaReport";
-import SatpamDashboard from "./pages/SatpamDashboard";
-import SupervisorDashboard from "./pages/SupervisorDashboard"; // Import SupervisorDashboard
-import { SessionContextProvider } from "./integrations/supabase/SessionContext";
-import Navbar from "./components/Navbar";
+import Schedules from "./pages/Schedules";
+import Admin from "./pages/Admin";
+import PrivateRoute from "./components/PrivateRoute";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const AppContent = () => {
-  const location = useLocation();
-  const isPrintPage = location.pathname.startsWith('/print-qr/');
-
+function App() {
   return (
-    <SessionContextProvider>
-      <div className="flex flex-col min-h-screen">
-        {!isPrintPage && <Navbar />}
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Profile />} /> {/* Rute default sekarang mengarah ke Profil */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/satpam-dashboard" element={<SatpamDashboard />} />
-            <Route path="/supervisor" element={<SupervisorDashboard />} /> {/* Rute baru */}
-            <Route path="/scan-location" element={<ScanLocation />} />
-            <Route path="/print-qr/:id" element={<PrintQRCode />} />
-            <Route path="/check-area-report" element={<CheckAreaReport />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
-      </div>
-    </SessionContextProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        <BrowserRouter>
+          <Toaster />
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/check-area-report" element={<PrivateRoute><CheckAreaReport /></PrivateRoute>} />
+              <Route path="/schedules" element={<PrivateRoute><Schedules /></PrivateRoute>} />
+              <Route path="/admin" element={<PrivateRoute roles={['admin']}><Admin /></PrivateRoute>} />
+              {/* Rute /profile dihapus */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </BrowserRouter>
+      </SessionProvider>
+    </QueryClientProvider>
   );
-};
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+}
 
 export default App;
