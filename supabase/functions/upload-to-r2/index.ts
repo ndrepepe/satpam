@@ -32,12 +32,12 @@ serve(async (req) => {
     const s3Client = new S3Client({
       region: "auto", // Cloudflare R2 menggunakan region 'auto'
       endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      // Langsung menyediakan kredensial statis
       credentials: {
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
       forcePathStyle: true, // Often needed for R2 compatibility
+      credentialDefaultProvider: () => Promise.resolve(undefined), // Menonaktifkan penyedia kredensial default
     });
     console.log("Edge Function: S3Client initialized for R2.");
 
