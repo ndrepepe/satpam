@@ -86,6 +86,16 @@ async function signAwsV4(
   headersToSign['host'] = host;
   headersToSign['x-amz-date'] = amzDate;
 
+  let payloadHash = 'UNSIGNED-PAYLOAD';
+  if (request.body) {
+    payloadHash = await sha256(request.body);
+  } else {
+    payloadHash = await sha256(''); // Empty string hash for no body
+  }
+  // *** FIX: Add x-amz-content-sha256 to headersToSign ***
+  headersToSign['x-amz-content-sha256'] = payloadHash;
+
+
   // Add other headers from request
   for (const key in request.headers) {
     headersToSign[key.toLowerCase()] = request.headers[key];
@@ -96,13 +106,6 @@ async function signAwsV4(
     canonicalHeaders += `${key}:${headersToSign[key].trim()}\n`;
   }
   signedHeaders = sortedHeaderKeys.join(';');
-
-  let payloadHash = 'UNSIGNED-PAYLOAD';
-  if (request.body) {
-    payloadHash = await sha256(request.body);
-  } else {
-    payloadHash = await sha256(''); // Empty string hash for no body
-  }
 
   const canonicalRequest = [
     method,
@@ -137,6 +140,7 @@ async function signAwsV4(
   return {
     'Authorization': authorizationHeader,
     'x-amz-date': amzDate,
+    'x-amz-content-sha256': payloadHash, // Ensure this is also in the final headers
     'host': host, // Ensure host is explicitly set in headers
     ...request.headers // Include any other original headers
   };
