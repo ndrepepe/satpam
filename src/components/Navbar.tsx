@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { Button } from '@/components/ui/button';
@@ -6,9 +6,35 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 const Navbar = () => {
-  const { user, loading } = useSession();
+  const { user, loading: sessionLoading } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!sessionLoading && user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching user role for Navbar:", error);
+          setUserRole(null);
+        } else if (data) {
+          setUserRole(data.role);
+        }
+      } else if (!sessionLoading && !user) {
+        setUserRole(null);
+      }
+      setProfileLoading(false);
+    };
+
+    fetchUserRole();
+  }, [user, sessionLoading]);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -20,8 +46,17 @@ const Navbar = () => {
     }
   };
 
-  if (loading) {
-    return null;
+  if (sessionLoading || profileLoading) {
+    return null; // Jangan render navbar sampai sesi dan peran dimuat
+  }
+
+  let dashboardPath = '/dashboard'; // Default path
+  if (userRole === 'admin') {
+    dashboardPath = '/admin';
+  } else if (userRole === 'satpam') {
+    dashboardPath = '/satpam-dashboard';
+  } else if (userRole === 'atasan') {
+    dashboardPath = '/supervisor-dashboard';
   }
 
   return (
@@ -31,8 +66,7 @@ const Navbar = () => {
         <div className="space-x-4">
           {user ? (
             <>
-              <Link to="/dashboard" className="hover:underline">Dashboard</Link>
-              {/* Tautan Profil dihapus sesuai permintaan */}
+              <Link to={dashboardPath} className="hover:underline">Dashboard</Link>
               <Button onClick={handleLogout} variant="ghost" className="text-white hover:bg-gray-700">Logout</Button>
             </>
           ) : (
