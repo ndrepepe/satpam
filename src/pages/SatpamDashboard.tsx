@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge'; // Import Badge component
 import { Input } from '@/components/ui/input'; // Import Input component
+import { format } from 'date-fns'; // Import format from date-fns
 
 interface Location {
   id: string;
@@ -68,33 +69,35 @@ const SatpamDashboard = () => {
         const now = new Date();
         const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
 
-        const currentGMT7Date = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
+        // Get current time in GMT+7
+        const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
 
-        let startOfCheckingDayGMT7 = new Date(currentGMT7Date);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
-
-        if (currentGMT7Date.getHours() < 6) {
-          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
+        let targetScheduleDate = new Date(currentGMT7Time);
+        // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
+        if (currentGMT7Time.getHours() < 6) {
+          targetScheduleDate.setDate(targetScheduleDate.getDate() - 1);
         }
-
-        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
-        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+        
+        // Format this target date to YYYY-MM-DD for the database query
+        const formattedTargetScheduleDate = format(targetScheduleDate, 'yyyy-MM-dd');
+        console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
         // --- NEW: Check if the user is scheduled for today ---
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
           .select('id')
           .eq('user_id', user.id)
-          .gte('schedule_date', startOfCheckingDayUTC.toISOString().split('T')[0]) // Compare only date part
-          .lte('schedule_date', endOfCheckingDayUTC.toISOString().split('T')[0]) // Compare only date part
-          .limit(1); // Only need to know if at least one schedule exists
+          .eq('schedule_date', formattedTargetScheduleDate) // Directly query the date
+          .limit(1);
 
         if (scheduleError) {
-          console.error("Error fetching schedule for user:", scheduleError);
+          console.error("SatpamDashboard: Error fetching schedule for user:", scheduleError);
           toast.error("Gagal memuat jadwal Anda.");
           setLoadingLocations(false);
           return;
         }
+
+        console.log("SatpamDashboard: Schedule data for user", user.id, "on", formattedTargetScheduleDate, ":", scheduleData);
 
         if (!scheduleData || scheduleData.length === 0) {
           setIsScheduledToday(false);
@@ -118,6 +121,10 @@ const SatpamDashboard = () => {
         }
 
         // Fetch reports for the current user within the defined "checking day"
+        // For reports, we still need the full timestamp range
+        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
+        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, created_at')
