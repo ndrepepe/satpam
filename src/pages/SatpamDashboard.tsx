@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // Import useLocation
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -13,16 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge'; // Import Badge component
-import { Input } from '@/components/ui/input'; // Import Input component
-import { format } from 'date-fns'; // Import format from date-fns
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { format } from 'date-fns';
 
 interface Location {
   id: string;
   name: string;
   qr_code_data: string;
   created_at: string;
-  isCheckedToday?: boolean; // Menambahkan properti baru
+  isCheckedToday?: boolean;
 }
 
 interface CheckAreaReport {
@@ -33,11 +33,13 @@ interface CheckAreaReport {
 const SatpamDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
   const navigate = useNavigate();
+  const location = useLocation(); // Initialize useLocation
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [isSatpam, setIsSatpam] = useState(false);
-  const [isScheduledToday, setIsScheduledToday] = useState(false); // State baru untuk status jadwal
-  const [searchQuery, setSearchQuery] = useState(''); // State baru untuk query pencarian
+  const [isScheduledToday, setIsScheduledToday] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // New state for refresh
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -48,7 +50,15 @@ const SatpamDashboard = () => {
       return;
     }
 
+    // Check if navigated from CheckAreaReport with refresh state
+    if (location.state?.refresh) {
+      setRefreshTrigger(prev => prev + 1);
+      // Clear the state so it doesn't trigger on subsequent visits without a new report
+      navigate(location.pathname, { replace: true, state: {} }); 
+    }
+
     const checkUserRoleAndFetchLocations = async () => {
+      setLoadingLocations(true); // Set loading true at the start of fetch
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -59,38 +69,32 @@ const SatpamDashboard = () => {
         console.error("Error fetching profile role:", profileError);
         toast.error("Gagal memuat peran pengguna.");
         navigate('/');
+        setLoadingLocations(false); // Ensure loading is false on error
         return;
       }
 
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
 
-        // Calculate the "checking day" based on 06:00 AM GMT+7
         const now = new Date();
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
-
-        // Get current time in GMT+7
+        const offsetGMT7ToUTC = 7; 
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
 
         let startOfCheckingDayGMT7 = new Date(currentGMT7Time);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
+        startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
 
-        // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
         if (currentGMT7Time.getHours() < 6) {
           startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
         }
         
-        // Format this target date to YYYY-MM-DD for the database query
-        // FIX: Use startOfCheckingDayGMT7 instead of undefined targetScheduleDate
         const formattedTargetScheduleDate = format(startOfCheckingDayGMT7, 'yyyy-MM-dd');
         console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
-        // --- NEW: Check if the user is scheduled for today ---
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
           .select('id')
           .eq('user_id', user.id)
-          .eq('schedule_date', formattedTargetScheduleDate) // Directly query the date
+          .eq('schedule_date', formattedTargetScheduleDate)
           .limit(1);
 
         if (scheduleError) {
@@ -106,11 +110,10 @@ const SatpamDashboard = () => {
           setIsScheduledToday(false);
           setLoadingLocations(false);
           toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
-          return; // Stop here if not scheduled
+          return;
         }
-        setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
+        setIsScheduledToday(true);
 
-        // Fetch locations
         const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
           .select('id, name, qr_code_data, created_at')
@@ -123,8 +126,6 @@ const SatpamDashboard = () => {
           return;
         }
 
-        // Fetch reports for the current user within the defined "checking day"
-        // For reports, we still need the full timestamp range
         const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
         const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
 
@@ -154,17 +155,17 @@ const SatpamDashboard = () => {
       } else {
         toast.error("Akses ditolak. Anda bukan satpam.");
         navigate('/');
+        setLoadingLocations(false); // Ensure loading is false on unauthorized access
       }
     };
 
     checkUserRoleAndFetchLocations();
-  }, [session, sessionLoading, user, navigate]);
+  }, [session, sessionLoading, user, navigate, location.state, refreshTrigger]); // Add refreshTrigger to dependencies
 
   const handleScanLocation = (locationId: string) => {
     navigate(`/scan-location?id=${locationId}`);
   };
 
-  // Filtered locations based on search query
   const filteredLocations = locations.filter(loc =>
     loc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -178,7 +179,7 @@ const SatpamDashboard = () => {
   }
 
   if (!isSatpam) {
-    return null; // Akan dialihkan oleh useEffect jika bukan satpam
+    return null;
   }
 
   return (
