@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -16,37 +16,38 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ReportEntry {
   id: string;
   location_id: string;
   photo_url: string;
   created_at: string;
-  profiles: { first_name: string; last_name: string } | null;
+  user_id: string; // Tambahkan user_id untuk filtering
+  profiles: { id: string; first_name: string; last_name: string } | null; // Tambahkan id di profiles
   locations: { name: string } | null;
 }
 
-interface GroupedReports {
-  [userId: string]: {
-    satpamName: string;
-    reports: ReportEntry[];
-  };
+interface SatpamOnDuty {
+  id: string;
+  name: string;
 }
 
 const SupervisorDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
   const navigate = useNavigate();
   const [isSupervisor, setIsSupervisor] = useState(false);
-  const [groupedReports, setGroupedReports] = useState<GroupedReports>({});
+  const [allReports, setAllReports] = useState<ReportEntry[]>([]); // Semua laporan untuk tanggal yang dipilih
   const [loadingReports, setLoadingReports] = useState(true);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [activeTab, setActiveTab] = useState<string>('all'); // 'all' atau user_id satpam
+  const [satpamOnDuty, setSatpamOnDuty] = useState<SatpamOnDuty[]>([]); // Daftar satpam yang bertugas
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -76,25 +77,16 @@ const SupervisorDashboard = () => {
 
         if (!selectedDate) {
           setLoadingReports(false);
-          setGroupedReports({});
+          setAllReports([]);
+          setSatpamOnDuty([]);
           return;
         }
 
-        // Create a Date object representing 06:00 AM on the selected calendar date, in the *local* timezone.
-        // The .toISOString() method will then correctly convert this local time to its UTC equivalent.
         const localStartOfCheckingDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 6, 0, 0);
-
-        // The UTC start time for the "checking day" (06:00 AM GMT+7)
         const startOfCheckingDayUTC = localStartOfCheckingDay.toISOString();
-
-        // The UTC end time for the "checking day" (24 hours after the start)
         const endOfCheckingDayUTC = new Date(localStartOfCheckingDay.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
-        console.log(`SupervisorDashboard: Selected Date (Calendar): ${format(selectedDate, 'yyyy-MM-dd')}`);
-        console.log(`SupervisorDashboard: Local Start of Checking Day (06:00 AM): ${localStartOfCheckingDay.toLocaleString()}`);
-        console.log(`SupervisorDashboard: Supabase Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
-
-        // Fetch all reports for the selected "checking day"
+        setLoadingReports(true);
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select(`
@@ -102,12 +94,13 @@ const SupervisorDashboard = () => {
             location_id,
             photo_url,
             created_at,
-            profiles (first_name, last_name),
+            user_id,
+            profiles (id, first_name, last_name),
             locations (name)
           `)
           .gte('created_at', startOfCheckingDayUTC)
           .lt('created_at', endOfCheckingDayUTC)
-          .order('created_at', { ascending: false }); // Order by latest report first
+          .order('created_at', { ascending: false });
 
         if (reportsError) {
           console.error("Error fetching reports for selected date:", reportsError);
@@ -116,22 +109,19 @@ const SupervisorDashboard = () => {
           return;
         }
 
-        // Group reports by user
-        const newGroupedReports: GroupedReports = {};
+        setAllReports(reportsData);
+
+        // Extract unique satpam who made reports
+        const uniqueSatpam = new Map<string, SatpamOnDuty>();
         reportsData.forEach(report => {
-          const userId = report.profiles?.id || 'unknown'; // Assuming profiles has an id
-          const satpamName = report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'Satpam Tidak Dikenal';
-
-          if (!newGroupedReports[userId]) {
-            newGroupedReports[userId] = {
-              satpamName: satpamName,
-              reports: [],
-            };
+          if (report.profiles && !uniqueSatpam.has(report.profiles.id)) {
+            uniqueSatpam.set(report.profiles.id, {
+              id: report.profiles.id,
+              name: `${report.profiles.first_name} ${report.profiles.last_name}`,
+            });
           }
-          newGroupedReports[userId].reports.push(report);
         });
-
-        setGroupedReports(newGroupedReports);
+        setSatpamOnDuty(Array.from(uniqueSatpam.values()));
         setLoadingReports(false);
       } else {
         toast.error("Akses ditolak. Anda bukan atasan.");
@@ -143,7 +133,6 @@ const SupervisorDashboard = () => {
   }, [session, sessionLoading, user, navigate, selectedDate]);
 
   const handleViewPhoto = (url: string) => {
-    console.log("SupervisorDashboard: Opening photo modal. URL:", url);
     setSelectedPhotoUrl(url);
     setIsPhotoModalOpen(true);
   };
@@ -152,6 +141,13 @@ const SupervisorDashboard = () => {
     setSelectedPhotoUrl(null);
     setIsPhotoModalOpen(false);
   };
+
+  const filteredReports = useMemo(() => {
+    if (activeTab === 'all') {
+      return allReports;
+    }
+    return allReports.filter(report => report.user_id === activeTab);
+  }, [allReports, activeTab]);
 
   if (sessionLoading || loadingReports) {
     return (
@@ -165,8 +161,6 @@ const SupervisorDashboard = () => {
     return null;
   }
 
-  const satpamIds = Object.keys(groupedReports);
-
   return (
     <div className="container mx-auto p-4">
       <Card className="max-w-5xl mx-auto mt-8">
@@ -175,7 +169,7 @@ const SupervisorDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
-            <h3 className="text-xl font-semibold">Laporan Cek Area per Satpam</h3>
+            <h3 className="text-xl font-semibold">Laporan Cek Area</h3>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -200,60 +194,60 @@ const SupervisorDashboard = () => {
             </Popover>
           </div>
           
-          {satpamIds.length === 0 ? (
+          {allReports.length === 0 ? (
             <p className="text-center text-gray-600 dark:text-gray-400">
               Tidak ada laporan cek area untuk tanggal {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'yang dipilih'}.
             </p>
           ) : (
-            <div className="space-y-8">
-              {satpamIds.map(userId => {
-                const satpamGroup = groupedReports[userId];
-                return (
-                  <Card key={userId} className="border-2 border-gray-200 dark:border-gray-700">
-                    <CardHeader className="bg-gray-50 dark:bg-gray-700 py-3 px-4 rounded-t-lg">
-                      <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                        Personel: {satpamGroup.satpamName}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Lokasi</TableHead>
-                            <TableHead>Waktu Laporan</TableHead>
-                            <TableHead>Foto</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {satpamGroup.reports.map(report => (
-                            <TableRow key={report.id}>
-                              <TableCell className="font-medium">{report.locations?.name || 'N/A'}</TableCell>
-                              <TableCell>
-                                {format(new Date(report.created_at), 'dd MMMM yyyy HH:mm', { locale: id })}
-                              </TableCell>
-                              <TableCell>
-                                {report.photo_url ? (
-                                  <Button
-                                    variant="link"
-                                    size="sm"
-                                    onClick={() => handleViewPhoto(report.photo_url!)}
-                                    className="p-0 h-auto text-blue-500 hover:underline"
-                                  >
-                                    Lihat Foto
-                                  </Button>
-                                ) : (
-                                  '-'
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <TabsTrigger value="all">Semua Laporan</TabsTrigger>
+                {satpamOnDuty.map(satpam => (
+                  <TabsTrigger key={satpam.id} value={satpam.id}>
+                    {satpam.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value={activeTab} className="mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Personel</TableHead>
+                      <TableHead>Lokasi</TableHead>
+                      <TableHead>Waktu Laporan</TableHead>
+                      <TableHead>Foto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredReports.map(report => (
+                      <TableRow key={report.id}>
+                        <TableCell className="font-medium">
+                          {report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'N/A'}
+                        </TableCell>
+                        <TableCell>{report.locations?.name || 'N/A'}</TableCell>
+                        <TableCell>
+                          {format(new Date(report.created_at), 'dd MMMM yyyy HH:mm', { locale: id })}
+                        </TableCell>
+                        <TableCell>
+                          {report.photo_url ? (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              onClick={() => handleViewPhoto(report.photo_url!)}
+                              className="p-0 h-auto text-blue-500 hover:underline"
+                            >
+                              Lihat Foto
+                            </Button>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TabsContent>
+            </Tabs>
           )}
         </CardContent>
       </Card>
@@ -265,14 +259,11 @@ const SupervisorDashboard = () => {
           </DialogHeader>
           <div className="flex justify-center items-center p-4">
             {selectedPhotoUrl ? (
-              <>
-                <img 
-                  src={selectedPhotoUrl} 
-                  alt="Laporan Cek Area" 
-                  className="max-w-full max-h-[70vh] h-auto rounded-md object-contain" 
-                />
-                {console.log("SupervisorDashboard: Image source in modal:", selectedPhotoUrl)}
-              </>
+              <img 
+                src={selectedPhotoUrl} 
+                alt="Laporan Cek Area" 
+                className="max-w-full max-h-[70vh] h-auto rounded-md object-contain" 
+              />
             ) : (
               <p>Tidak ada foto untuk ditampilkan.</p>
             )}
