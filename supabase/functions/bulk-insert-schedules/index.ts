@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { schedulesData } = await req.json(); // Expecting [{ date: 'YYYY-MM-DD', userId: 'uuid' }]
+    const { schedulesData } = await req.json(); // Expecting [{ date: 'YYYY-MM-DD', userId: 'uuid', buildingPosition: 'string' }]
 
     if (!schedulesData || !Array.isArray(schedulesData) || schedulesData.length === 0) {
       return new Response(JSON.stringify({ error: 'Invalid or empty schedules data provided.' }), {
@@ -32,10 +32,10 @@ serve(async (req) => {
       }
     );
 
-    // Fetch all locations to assign to
-    const { data: locations, error: locationsError } = await supabaseAdmin
+    // Fetch all locations to filter by building position
+    const { data: allLocations, error: locationsError } = await supabaseAdmin
       .from('locations')
-      .select('id');
+      .select('id, posisi_gedung');
 
     if (locationsError) {
       console.error("Error fetching locations in Edge Function:", locationsError);
@@ -45,17 +45,16 @@ serve(async (req) => {
       });
     }
 
-    if (!locations || locations.length === 0) {
-      return new Response(JSON.stringify({ error: 'No locations found to assign schedules to.' }), {
+    if (!allLocations || allLocations.length === 0) {
+      return new Response(JSON.stringify({ error: 'No locations found in the database.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 404,
       });
     }
 
-    const locationIds = locations.map(loc => loc.id);
     const schedulesToInsert = [];
 
-    // Fetch existing schedules to prevent duplicates for the same user on the same date
+    // Fetch existing schedules for the dates and users involved to prevent duplicates
     const uniqueScheduleDates = [...new Set(schedulesData.map((s: any) => s.date))];
     const uniqueUserIds = [...new Set(schedulesData.map((s: any) => s.userId))];
 
@@ -76,22 +75,37 @@ serve(async (req) => {
     const existingScheduleSet = new Set(existingSchedules?.map(s => `${s.user_id}-${s.schedule_date}`));
 
     for (const entry of schedulesData) {
-      const { date, userId } = entry;
+      const { date, userId, buildingPosition } = entry;
+
+      // Skip if this user already has any schedule for this date
       if (existingScheduleSet.has(`${userId}-${date}`)) {
-        console.warn(`Skipping duplicate schedule for user ${userId} on date ${date}`);
-        continue; // Skip if already scheduled
+        console.warn(`Skipping duplicate schedule for user ${userId} on date ${date} (already scheduled).`);
+        continue; 
       }
-      for (const locationId of locationIds) {
+
+      let locationsForThisAssignment: { id: string }[] = [];
+      if (buildingPosition === 'Semua Gedung') {
+        locationsForThisAssignment = allLocations;
+      } else {
+        locationsForThisAssignment = allLocations.filter(loc => loc.posisi_gedung === buildingPosition);
+      }
+
+      if (locationsForThisAssignment.length === 0) {
+        console.warn(`No locations found for building position '${buildingPosition}' for user ${userId} on date ${date}. Skipping this assignment.`);
+        continue; // Skip this specific assignment if no locations match
+      }
+
+      for (const location of locationsForThisAssignment) {
         schedulesToInsert.push({
           schedule_date: date,
           user_id: userId,
-          location_id: locationId,
+          location_id: location.id,
         });
       }
     }
 
     if (schedulesToInsert.length === 0) {
-      return new Response(JSON.stringify({ message: 'No new schedules to insert (all duplicates or no locations).' }), {
+      return new Response(JSON.stringify({ message: 'No new schedules to insert (all duplicates or no matching locations).' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });

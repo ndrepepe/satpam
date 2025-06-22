@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } => '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
@@ -274,7 +274,7 @@ const SatpamSchedule: React.FC = () => {
       if (entry.assignedLocationIds.size === allLocationsCount) {
         locationDisplay = "Semua Lokasi";
         assignmentType = "Semua Gedung";
-      } else if (assignedToGedungBarat && !assignedToGedungTimur) { // Fixed typo here
+      } else if (assignedToGedungBarat && !assignedToGedungTimur) {
         locationDisplay = "Gedung Barat";
         assignmentType = "Gedung Barat";
       } else if (assignedToGedungTimur && !assignedToGedungBarat) {
@@ -593,16 +593,17 @@ const SatpamSchedule: React.FC = () => {
 
         const nameColIndex = headers.indexOf('Nama');
         const idColIndex = headers.indexOf('No ID');
+        const buildingPositionColIndex = headers.indexOf('Posisi Gedung'); // New: Get index for 'Posisi Gedung'
 
-        if (nameColIndex === -1 || idColIndex === -1) {
-          toast.error("File XLSX harus memiliki kolom 'Nama' dan 'No ID'.");
+        if (nameColIndex === -1 || idColIndex === -1 || buildingPositionColIndex === -1) {
+          toast.error("File XLSX harus memiliki kolom 'Nama', 'No ID', dan 'Posisi Gedung'.");
           setLoading(false);
           return;
         }
 
         const dateColumns: { header: string; index: number }[] = [];
         for (let i = 0; i < headers.length; i++) {
-          if (i !== nameColIndex && i !== idColIndex) {
+          if (i !== nameColIndex && i !== idColIndex && i !== buildingPositionColIndex) { // Exclude new column
             try {
               // Attempt to parse header as a date (YYYY-MM-DD)
               const parsedDate = new Date(headers[i]);
@@ -621,17 +622,25 @@ const SatpamSchedule: React.FC = () => {
           return;
         }
 
-        const schedulesToProcess: { date: string; userId: string }[] = [];
+        const schedulesToProcess: { date: string; userId: string; buildingPosition: string }[] = []; // Updated type
         let hasError = false;
 
         for (const row of dataRows) {
           const satpamName = row[nameColIndex]?.toString().trim();
           const satpamIdNumber = row[idColIndex]?.toString().trim();
+          const buildingPosition = row[buildingPositionColIndex]?.toString().trim(); // New: Get building position
 
-          if (!satpamName || !satpamIdNumber) {
-            // Skip rows with missing name or ID, or show a warning
-            console.warn("Skipping row due to missing Nama or No ID:", row);
-            continue;
+          if (!satpamName || !satpamIdNumber || !buildingPosition) {
+            console.warn("Skipping row due to missing Nama, No ID, or Posisi Gedung:", row);
+            toast.error(`Baris dilewati karena data tidak lengkap (Nama, No ID, atau Posisi Gedung kosong): ${row.join(', ')}`);
+            hasError = true; // Mark as error to stop processing
+            break;
+          }
+
+          if (!['Semua Gedung', 'Gedung Barat', 'Gedung Timur'].includes(buildingPosition)) {
+            toast.error(`Posisi Gedung "${buildingPosition}" tidak valid. Harap gunakan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur'.`);
+            hasError = true;
+            break;
           }
 
           const userId = idNumberToUserIdMap.get(satpamIdNumber);
@@ -645,7 +654,7 @@ const SatpamSchedule: React.FC = () => {
           for (const dateCol of dateColumns) {
             const cellValue = row[dateCol.index]?.toString().trim();
             if (cellValue && cellValue !== '') { // If cell has any value, consider it assigned
-              schedulesToProcess.push({ date: dateCol.header, userId: userId });
+              schedulesToProcess.push({ date: dateCol.header, userId: userId, buildingPosition: buildingPosition }); // Updated
             }
           }
         }
@@ -698,7 +707,7 @@ const SatpamSchedule: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = ["Nama", "No ID"];
+    const headers = ["Nama", "No ID", "Posisi Gedung"]; // Added 'Posisi Gedung'
     const today = new Date();
     // Add next 30 days as date headers
     for (let i = 0; i < 30; i++) { 
@@ -712,7 +721,8 @@ const SatpamSchedule: React.FC = () => {
       const exampleSatpam1 = satpamList[0];
       const row1: (string | null)[] = [
         `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
-        exampleSatpam1.id_number || 'ID001'
+        exampleSatpam1.id_number || 'ID001',
+        'Gedung Barat' // Example for 'Posisi Gedung'
       ];
       for (let i = 0; i < 30; i++) { 
         row1.push(i === 0 || i === 2 ? 'X' : null); 
@@ -723,7 +733,8 @@ const SatpamSchedule: React.FC = () => {
         const exampleSatpam2 = satpamList[1];
         const row2: (string | null)[] = [
           `${exampleSatpam2.first_name} ${exampleSatpam2.last_name}`,
-          exampleSatpam2.id_number || 'ID002'
+          exampleSatpam2.id_number || 'ID002',
+          'Semua Gedung' // Another example
         ];
         for (let i = 0; i < 30; i++) { 
           row2.push(i === 1 || i === 3 ? 'X' : null); 
@@ -732,10 +743,10 @@ const SatpamSchedule: React.FC = () => {
       }
     } else {
       // Fallback if no satpam data
-      const row1: (string | null)[] = ["Budi Santoso", "ID001"];
+      const row1: (string | null)[] = ["Budi Santoso", "ID001", "Gedung Barat"];
       for (let i = 0; i < 30; i++) row1.push(null); 
       ws_data.push(row1);
-      const row2: (string | null)[] = ["Siti Aminah", "ID002"];
+      const row2: (string | null)[] = ["Siti Aminah", "ID002", "Semua Gedung"];
       for (let i = 0; i < 30; i++) row2.push(null); 
       ws_data.push(row2);
     }
@@ -821,7 +832,7 @@ const SatpamSchedule: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Nama' (nama lengkap personel) dan 'No ID' (nomor ID personel) di awal, diikuti oleh kolom-kolom tanggal (misal: YYYY-MM-DD). Isi sel dengan nilai apa pun (misal: 'X') untuk menandakan personel bertugas pada tanggal tersebut.
+            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Nama' (nama lengkap personel), 'No ID' (nomor ID personel), dan 'Posisi Gedung' (isi dengan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur') di awal, diikuti oleh kolom-kolom tanggal (misal: YYYY-MM-DD). Isi sel dengan nilai apa pun (misal: 'X') untuk menandakan personel bertugas pada tanggal tersebut.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-2">
             <Input
