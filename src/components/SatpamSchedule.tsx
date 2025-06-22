@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } => '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import * as XLSX from 'xlsx';
+import *t as XLSX from 'xlsx';
 
 interface SatpamProfile {
   id: string;
@@ -739,7 +739,6 @@ const SatpamSchedule: React.FC = () => {
         for (let i = 0; i < 30; i++) { 
           row2.push(i === 1 || i === 3 ? 'X' : null); 
         }
-        ws_data.push(row2);
       }
     } else {
       // Fallback if no satpam data
