@@ -50,19 +50,21 @@ interface ScheduleEntry {
   user_id: string;
   location_id: string;
   profiles: { first_name: string; last_name: string; id_number?: string } | null;
-  locations: { name: string } | null;
+  locations: { name: string; posisi_gedung?: string | null } | null; // Tambahkan posisi_gedung
 }
 
-interface GroupedScheduleEntry {
+interface DailyScheduleSummaryEntry {
   user_id: string;
   schedule_date: string;
   profileName: string;
   idNumber?: string;
+  locationDisplay: string; // e.g., "Semua Lokasi", "Gedung Barat", "Beberapa Lokasi"
+  assignedLocationIds: Set<string>; // To determine the type of assignment
 }
 
 interface SummarizedRangeScheduleEntry {
   schedule_date: string;
-  user_id: string; // Added user_id for actions
+  user_id: string;
   profileName: string;
   idNumber?: string;
   locationDisplay: string;
@@ -74,14 +76,16 @@ const SatpamSchedule: React.FC = () => {
   const [locationList, setLocationList] = useState<Location[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
-  const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung'); // New state for building position
+  const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung');
   const [loading, setLoading] = useState(true);
 
   // State for Reassign Dialog
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [originalUserId, setOriginalUserId] = useState<string | null>(null);
   const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
+  const [originalLocationAssignmentType, setOriginalLocationAssignmentType] = useState<string | undefined>(undefined); // New state
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
+  const [newSelectedBuildingPosition, setNewSelectedBuildingPosition] = useState<string | undefined>(undefined); // New state for dialog
 
   // New states for date range filtering
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
@@ -146,8 +150,8 @@ const SatpamSchedule: React.FC = () => {
           user_id,
           location_id,
           profiles (first_name, last_name, id_number),
-          locations (name)
-        `)
+          locations (name, posisi_gedung)
+        `) // Select posisi_gedung
         .eq('schedule_date', formattedDate)
         .order('created_at', { ascending: false });
 
@@ -184,8 +188,8 @@ const SatpamSchedule: React.FC = () => {
           user_id,
           location_id,
           profiles (first_name, last_name, id_number),
-          locations (name)
-        `)
+          locations (name, posisi_gedung)
+        `) // Select posisi_gedung
         .gte('schedule_date', formattedStartDate)
         .lte('schedule_date', formattedEndDate)
         .order('schedule_date', { ascending: true }); 
@@ -221,8 +225,16 @@ const SatpamSchedule: React.FC = () => {
     }
   }, [selectedDate]);
 
-  const groupedSchedules = useMemo(() => {
-    const grouped = new Map<string, GroupedScheduleEntry>();
+  const dailySchedulesSummary = useMemo(() => {
+    const grouped = new Map<string, {
+      user_id: string;
+      schedule_date: string;
+      profileName: string;
+      idNumber?: string;
+      assignedLocationIds: Set<string>;
+      assignedBuildingPositions: Set<string>; // New: to track assigned buildings
+    }>();
+
     schedules.forEach(schedule => {
       const key = `${schedule.user_id}-${schedule.schedule_date}`;
       if (!grouped.has(key)) {
@@ -231,11 +243,59 @@ const SatpamSchedule: React.FC = () => {
           schedule_date: schedule.schedule_date,
           profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
           idNumber: schedule.profiles?.id_number || 'N/A',
+          assignedLocationIds: new Set(),
+          assignedBuildingPositions: new Set(),
         });
       }
+      const entry = grouped.get(key)!;
+      entry.assignedLocationIds.add(schedule.location_id);
+      if (schedule.locations?.posisi_gedung) {
+        entry.assignedBuildingPositions.add(schedule.locations.posisi_gedung);
+      }
     });
-    return Array.from(grouped.values());
-  }, [schedules]);
+
+    const result: DailyScheduleSummaryEntry[] = [];
+    grouped.forEach(entry => {
+      let locationDisplay: string;
+      let assignmentType: string; // To be used for pre-filling the select in edit modal
+
+      const allLocationsCount = locationList.length;
+      const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
+      const gedungTimurLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur');
+
+      const assignedToGedungBarat = Array.from(entry.assignedLocationIds).every(locId => 
+        gedungBaratLocations.some(gbLoc => gbLoc.id === locId)
+      ) && entry.assignedLocationIds.size === gedungBaratLocations.length;
+
+      const assignedToGedungTimur = Array.from(entry.assignedLocationIds).every(locId => 
+        gedungTimurLocations.some(gtLoc => gtLoc.id === locId)
+      ) && entry.assignedLocationIds.size === gedungTimurLocations.length;
+
+      if (entry.assignedLocationIds.size === allLocationsCount) {
+        locationDisplay = "Semua Lokasi";
+        assignmentType = "Semua Gedung";
+      } else if (assignedToGedungBar && !assignedToGedungTimur) {
+        locationDisplay = "Gedung Barat";
+        assignmentType = "Gedung Barat";
+      } else if (assignedToGedungTimur && !assignedToGedungBarat) {
+        locationDisplay = "Gedung Timur";
+        assignmentType = "Gedung Timur";
+      } else {
+        locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
+        assignmentType = "Beberapa Lokasi"; // Indicate a custom/mixed assignment
+      }
+
+      result.push({
+        schedule_date: entry.schedule_date,
+        user_id: entry.user_id,
+        profileName: entry.profileName,
+        idNumber: entry.idNumber,
+        locationDisplay: locationDisplay,
+        assignedLocationIds: entry.assignedLocationIds, // Keep for edit logic
+      });
+    });
+    return Array.from(result.values());
+  }, [schedules, locationList]);
 
   // New useMemo for summarizing range schedules
   const processedRangeSchedules = useMemo(() => {
@@ -395,68 +455,109 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const handleEditScheduleAssignmentClick = (userId: string, scheduleDate: string) => {
-    setOriginalUserId(userId);
-    setOriginalScheduleDate(scheduleDate);
-    setNewSelectedSatpamId(userId); // Pre-select current satpam in dropdown
+  const handleEditScheduleAssignmentClick = (scheduleSummary: DailyScheduleSummaryEntry) => {
+    setOriginalUserId(scheduleSummary.user_id);
+    setOriginalScheduleDate(scheduleSummary.schedule_date);
+    setOriginalLocationAssignmentType(scheduleSummary.locationDisplay); // Store original assignment type
+    setNewSelectedSatpamId(scheduleSummary.user_id); // Pre-select current satpam in dropdown
+    setNewSelectedBuildingPosition(scheduleSummary.locationDisplay === "Beberapa Lokasi" ? "Semua Gedung" : scheduleSummary.locationDisplay); // Pre-select current building position, default to 'Semua Gedung' if mixed
     setIsReassignDialogOpen(true);
   };
 
   const handleSaveScheduleAssignment = async () => {
-    if (!originalUserId || !originalScheduleDate || !newSelectedSatpamId) {
+    if (!originalUserId || !originalScheduleDate || !newSelectedSatpamId || !newSelectedBuildingPosition) {
       toast.error("Data tidak lengkap untuk mengubah penugasan.");
       return;
     }
 
-    if (originalUserId === newSelectedSatpamId) {
-      toast.info("Personel yang dipilih sama dengan personel saat ini. Tidak ada perubahan yang disimpan.");
+    // Check if both satpam and building position are unchanged
+    const isSatpamUnchanged = originalUserId === newSelectedSatpamId;
+    const isBuildingPositionUnchanged = originalLocationAssignmentType === newSelectedBuildingPosition;
+
+    if (isSatpamUnchanged && isBuildingPositionUnchanged) {
+      toast.info("Tidak ada perubahan yang disimpan.");
       setIsReassignDialogOpen(false);
       return;
     }
 
     setLoading(true);
     try {
-      // VALIDATION: Check if the new selected satpam is already assigned on the original schedule date
-      const { data: existingAssignment, error: existingAssignmentError } = await supabase
+      const formattedDate = originalScheduleDate;
+
+      // If changing satpam, check if the new satpam is already assigned on this date
+      if (!isSatpamUnchanged) {
+        const { data: existingAssignment, error: existingAssignmentError } = await supabase
+          .from('schedules')
+          .select('id')
+          .eq('user_id', newSelectedSatpamId)
+          .eq('schedule_date', formattedDate)
+          .limit(1);
+
+        if (existingAssignmentError) throw existingAssignmentError;
+
+        if (existingAssignment && existingAssignment.length > 0) {
+          const newSatpamName = satpamList.find(s => s.id === newSelectedSatpamId)?.first_name || 'Personel ini';
+          toast.error(`${newSatpamName} sudah memiliki jadwal tugas di tanggal ${format(new Date(formattedDate), 'dd MMMM yyyy', { locale: idLocale })}.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 1. Delete all existing schedule entries for the original user on the original date
+      const { error: deleteError } = await supabase
         .from('schedules')
-        .select('id')
-        .eq('user_id', newSelectedSatpamId)
-        .eq('schedule_date', originalScheduleDate)
-        .limit(1); // Only need to know if at least one exists
+        .delete()
+        .eq('user_id', originalUserId)
+        .eq('schedule_date', formattedDate);
 
-      if (existingAssignmentError) throw existingAssignmentError;
+      if (deleteError) throw deleteError;
 
-      if (existingAssignment && existingAssignment.length > 0) {
-        const newSatpamName = satpamList.find(s => s.id === newSelectedSatpamId)?.first_name || 'Personel ini';
-        toast.error(`${newSatpamName} sudah memiliki jadwal tugas di tanggal ${format(new Date(originalScheduleDate), 'dd MMMM yyyy', { locale: idLocale })}.`);
+      // 2. Determine locations to insert based on the new selected building position
+      let locationsToInsert: Location[] = [];
+      if (newSelectedBuildingPosition === 'Semua Gedung') {
+        locationsToInsert = locationList;
+      } else {
+        locationsToInsert = locationList.filter(loc => loc.posisi_gedung === newSelectedBuildingPosition);
+      }
+
+      if (locationsToInsert.length === 0) {
+        toast.error(`Tidak ada lokasi yang terdaftar untuk ${newSelectedBuildingPosition}.`);
         setLoading(false);
         return;
       }
 
-      // Update all schedule entries for the original user on the original date
-      const { error } = await supabase
+      // 3. Insert new schedule entries for the new user and new building position
+      const schedulesToInsert = [];
+      for (const location of locationsToInsert) {
+        schedulesToInsert.push({
+          schedule_date: formattedDate,
+          user_id: newSelectedSatpamId,
+          location_id: location.id,
+        });
+      }
+
+      const { error: insertError } = await supabase
         .from('schedules')
-        .update({ user_id: newSelectedSatpamId })
-        .eq('user_id', originalUserId)
-        .eq('schedule_date', originalScheduleDate);
+        .insert(schedulesToInsert);
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      toast.success("Penugasan personel berhasil diperbarui.");
+      toast.success("Penugasan jadwal berhasil diperbarui.");
       setIsReassignDialogOpen(false);
       setOriginalUserId(null);
       setOriginalScheduleDate(null);
+      setOriginalLocationAssignmentType(undefined);
       setNewSelectedSatpamId(undefined);
+      setNewSelectedBuildingPosition(undefined);
       
       if (selectedDate) {
         await fetchSchedules(selectedDate); // Re-fetch schedules to update the table
       }
-      // Also refresh range schedules if they are currently displayed
       if (startDate && endDate) {
         fetchRangeSchedules();
       }
     } catch (error: any) {
-      toast.error(`Gagal memperbarui penugasan personel: ${error.message}`);
+      toast.error(`Gagal memperbarui penugasan jadwal: ${error.message}`);
       console.error("Error updating schedule assignment:", error);
     } finally {
       setLoading(false);
@@ -653,7 +754,7 @@ const SatpamSchedule: React.FC = () => {
           <CardTitle>Tambah Jadwal Baru</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* Changed to grid for better layout */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Tanggal</label>
               <Popover>
@@ -827,7 +928,7 @@ const SatpamSchedule: React.FC = () => {
                   <TableHead>Personel</TableHead>
                   <TableHead>No. ID</TableHead>
                   <TableHead>Lokasi</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead> {/* Added Aksi column */}
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -837,12 +938,12 @@ const SatpamSchedule: React.FC = () => {
                     <TableCell>{schedule.profileName}</TableCell>
                     <TableCell>{schedule.idNumber}</TableCell>
                     <TableCell>{schedule.locationDisplay}</TableCell>
-                    <TableCell className="text-right"> {/* Added action buttons */}
+                    <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(schedule.user_id, schedule.schedule_date)}
+                          onClick={() => handleEditScheduleAssignmentClick(dailySchedulesSummary.find(s => s.user_id === schedule.user_id && s.schedule_date === schedule.schedule_date)!)}
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -870,7 +971,7 @@ const SatpamSchedule: React.FC = () => {
           <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
         </CardHeader>
         <CardContent>
-          {groupedSchedules.length === 0 ? (
+          {dailySchedulesSummary.length === 0 ? (
             <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
           ) : (
             <Table>
@@ -884,18 +985,18 @@ const SatpamSchedule: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedSchedules.map((schedule) => (
+                {dailySchedulesSummary.map((schedule) => (
                   <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
                     <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
                     <TableCell>{schedule.profileName}</TableCell>
                     <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>Semua Lokasi</TableCell> {/* This already says "Semua Lokasi" */}
+                    <TableCell>{schedule.locationDisplay}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(schedule.user_id, schedule.schedule_date)}
+                          onClick={() => handleEditScheduleAssignmentClick(schedule)}
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -922,9 +1023,9 @@ const SatpamSchedule: React.FC = () => {
       <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Ubah Penugasan Personel</DialogTitle>
+            <DialogTitle>Ubah Penugasan Jadwal</DialogTitle>
             <DialogDescription>
-              Pilih personel satpam baru untuk jadwal ini.
+              Pilih personel satpam dan/atau posisi gedung baru untuk jadwal ini.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -942,6 +1043,21 @@ const SatpamSchedule: React.FC = () => {
                       {satpam.first_name} {satpam.last_name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="newBuildingPosition" className="text-right">
+                Posisi Gedung Baru
+              </Label>
+              <Select onValueChange={setNewSelectedBuildingPosition} value={newSelectedBuildingPosition} disabled={loading}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Pilih Gedung Baru" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
+                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
+                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
                 </SelectContent>
               </Select>
             </div>
