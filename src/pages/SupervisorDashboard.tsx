@@ -161,7 +161,7 @@ const SupervisorDashboard = () => {
   }, [session, sessionLoading, user, navigate, selectedDate]);
 
   const handleViewPhoto = (url: string) => {
-    console.log("SupervisorDashboard: Opening photo modal. URL:", url); // LOG BARU
+    console.log("SupervisorDashboard: Opening photo modal. URL:", url);
     setSelectedPhotoUrl(url);
     setIsPhotoModalOpen(true);
   };
@@ -266,15 +266,19 @@ const SupervisorDashboard = () => {
       </Card>
 
       <Dialog open={isPhotoModalOpen} onOpenChange={handleClosePhotoModal}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Foto Laporan</DialogTitle>
           </DialogHeader>
           <div className="flex justify-center items-center p-4">
             {selectedPhotoUrl ? (
               <>
-                <img src={selectedPhotoUrl} alt="Laporan Cek Area" className="max-w-full h-auto rounded-md" />
-                {console.log("SupervisorDashboard: Image source in modal:", selectedPhotoUrl)} {/* LOG BARU */}
+                <img 
+                  src={selectedPhotoUrl} 
+                  alt="Laporan Cek Area" 
+                  className="max-w-full max-h-[70vh] h-auto rounded-md object-contain" 
+                />
+                {console.log("SupervisorDashboard: Image source in modal:", selectedPhotoUrl)}
               </>
             ) : (
               <p>Tidak ada foto untuk ditampilkan.</p>
