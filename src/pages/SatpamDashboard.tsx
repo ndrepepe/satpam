@@ -88,13 +88,12 @@ const SatpamDashboard = () => {
         const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
         console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
-        // --- NEW: Check if the user is scheduled for today ---
+        // --- NEW: Check if the user is scheduled for today and get assigned locations ---
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
-          .select('id')
+          .select('location_id') // Only need location_id for filtering
           .eq('user_id', user.id)
-          .eq('schedule_date', formattedTargetScheduleDate)
-          .limit(1);
+          .eq('schedule_date', formattedTargetScheduleDate);
 
         if (scheduleError) {
           console.error("SatpamDashboard: Error fetching schedule for user:", scheduleError);
@@ -109,14 +108,20 @@ const SatpamDashboard = () => {
           setIsScheduledToday(false);
           setLoadingLocations(false);
           toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
+          setLocations([]); // Clear locations if not scheduled
           return;
         }
         setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
 
-        // Fetch locations
+        // Extract scheduled location IDs
+        const scheduledLocationIds = scheduleData.map(s => s.location_id);
+        console.log("SatpamDashboard: Scheduled Location IDs for today:", scheduledLocationIds);
+
+        // Fetch locations that are part of today's schedule
         const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
           .select('id, name, qr_code_data, created_at')
+          .in('id', scheduledLocationIds) // <--- THIS IS THE KEY CHANGE
           .order('name', { ascending: true });
 
         if (locationsError) {
@@ -217,7 +222,7 @@ const SatpamDashboard = () => {
               </div>
               {filteredLocations.length === 0 ? (
                 <p className="text-center text-gray-600 dark:text-gray-400">
-                  {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar."}
+                  {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar untuk jadwal Anda hari ini."}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
