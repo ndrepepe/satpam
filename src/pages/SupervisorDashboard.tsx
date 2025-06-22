@@ -22,22 +22,27 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
-interface LocationWithStatus {
+interface ReportEntry {
   id: string;
-  name: string;
-  qr_code_data: string;
+  location_id: string;
+  photo_url: string;
   created_at: string;
-  isCheckedToday: boolean;
-  lastReportedBy?: string;
-  lastReportedTime?: string;
-  lastReportPhotoUrl?: string;
+  profiles: { first_name: string; last_name: string } | null;
+  locations: { name: string } | null;
+}
+
+interface GroupedReports {
+  [userId: string]: {
+    satpamName: string;
+    reports: ReportEntry[];
+  };
 }
 
 const SupervisorDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
   const navigate = useNavigate();
   const [isSupervisor, setIsSupervisor] = useState(false);
-  const [locationsWithStatus, setLocationsWithStatus] = useState<LocationWithStatus[]>([]);
+  const [groupedReports, setGroupedReports] = useState<GroupedReports>({});
   const [loadingReports, setLoadingReports] = useState(true);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
@@ -69,23 +74,9 @@ const SupervisorDashboard = () => {
       if (profileData?.role === 'atasan') {
         setIsSupervisor(true);
 
-        // 1. Fetch all locations
-        const { data: allLocationsData, error: allLocationsError } = await supabase
-          .from('locations')
-          .select('id, name, qr_code_data, created_at')
-          .order('name', { ascending: true });
-
-        if (allLocationsError) {
-          console.error("Error fetching all locations:", allLocationsError);
-          toast.error(`Gagal memuat daftar lokasi: ${allLocationsError.message}`);
-          setLoadingReports(false);
-          return;
-        }
-
-        // 2. Calculate the "checking day" based on 06:00 AM GMT+7 for the selected date
         if (!selectedDate) {
           setLoadingReports(false);
-          setLocationsWithStatus([]);
+          setGroupedReports({});
           return;
         }
 
@@ -103,53 +94,44 @@ const SupervisorDashboard = () => {
         console.log(`SupervisorDashboard: Local Start of Checking Day (06:00 AM): ${localStartOfCheckingDay.toLocaleString()}`);
         console.log(`SupervisorDashboard: Supabase Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
 
-
-        // 3. Fetch reports for the selected "checking day"
-        const { data: reportsTodayData, error: reportsTodayError } = await supabase
+        // Fetch all reports for the selected "checking day"
+        const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select(`
             id,
             location_id,
             photo_url,
             created_at,
-            profiles (first_name, last_name)
+            profiles (first_name, last_name),
+            locations (name)
           `)
           .gte('created_at', startOfCheckingDayUTC)
           .lt('created_at', endOfCheckingDayUTC)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false }); // Order by latest report first
 
-        if (reportsTodayError) {
-          console.error("Error fetching reports for selected date:", reportsTodayError);
-          toast.error(`Gagal memuat laporan untuk tanggal ini: ${reportsTodayError.message}`);
+        if (reportsError) {
+          console.error("Error fetching reports for selected date:", reportsError);
+          toast.error(`Gagal memuat laporan untuk tanggal ini: ${reportsError.message}`);
           setLoadingReports(false);
           return;
         }
 
-        // 4. Process and combine data
-        const reportsMap = new Map<string, { reporter: string; time: string; photo: string }>();
-        reportsTodayData.forEach(report => {
-          console.log(`SupervisorDashboard: Fetched Report - Location ID: ${report.location_id}, Created At (UTC): ${report.created_at}`);
-          if (!reportsMap.has(report.location_id) || new Date(report.created_at) > new Date(reportsMap.get(report.location_id)!.time)) {
-            reportsMap.set(report.location_id, {
-              reporter: report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'N/A',
-              time: report.created_at,
-              photo: report.photo_url,
-            });
+        // Group reports by user
+        const newGroupedReports: GroupedReports = {};
+        reportsData.forEach(report => {
+          const userId = report.profiles?.id || 'unknown'; // Assuming profiles has an id
+          const satpamName = report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'Satpam Tidak Dikenal';
+
+          if (!newGroupedReports[userId]) {
+            newGroupedReports[userId] = {
+              satpamName: satpamName,
+              reports: [],
+            };
           }
+          newGroupedReports[userId].reports.push(report);
         });
 
-        const combinedLocations: LocationWithStatus[] = allLocationsData.map(loc => {
-          const reportDetails = reportsMap.get(loc.id);
-          return {
-            ...loc,
-            isCheckedToday: !!reportDetails,
-            lastReportedBy: reportDetails?.reporter,
-            lastReportedTime: reportDetails?.time,
-            lastReportPhotoUrl: reportDetails?.photo,
-          };
-        });
-
-        setLocationsWithStatus(combinedLocations);
+        setGroupedReports(newGroupedReports);
         setLoadingReports(false);
       } else {
         toast.error("Akses ditolak. Anda bukan atasan.");
@@ -183,6 +165,8 @@ const SupervisorDashboard = () => {
     return null;
   }
 
+  const satpamIds = Object.keys(groupedReports);
+
   return (
     <div className="container mx-auto p-4">
       <Card className="max-w-5xl mx-auto mt-8">
@@ -190,14 +174,14 @@ const SupervisorDashboard = () => {
           <CardTitle className="text-center">Dashboard Atasan</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Daftar Laporan Cek Area</h3>
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
+            <h3 className="text-xl font-semibold">Laporan Cek Area per Satpam</h3>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant={"outline"}
                   className={cn(
-                    "w-[240px] justify-start text-left font-normal",
+                    "w-full sm:w-[240px] justify-start text-left font-normal",
                     !selectedDate && "text-muted-foreground"
                   )}
                 >
@@ -215,52 +199,61 @@ const SupervisorDashboard = () => {
               </PopoverContent>
             </Popover>
           </div>
-          {locationsWithStatus.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-400">Belum ada lokasi yang terdaftar.</p>
+          
+          {satpamIds.length === 0 ? (
+            <p className="text-center text-gray-600 dark:text-gray-400">
+              Tidak ada laporan cek area untuk tanggal {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'yang dipilih'}.
+            </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nama Lokasi</TableHead>
-                  <TableHead>Status Cek {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'Hari Ini'}</TableHead>
-                  <TableHead>Dilaporkan Oleh</TableHead>
-                  <TableHead>Waktu Laporan Terakhir</TableHead>
-                  <TableHead>Foto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {locationsWithStatus.map((loc) => (
-                  <TableRow key={loc.id}>
-                    <TableCell className="font-medium">{loc.name}</TableCell>
-                    <TableCell>
-                      {loc.isCheckedToday ? (
-                        <Badge className="bg-green-500 hover:bg-green-500">Sudah Dilaporkan</Badge>
-                      ) : (
-                        <Badge variant="destructive">Belum Dilaporkan</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{loc.lastReportedBy || '-'}</TableCell>
-                    <TableCell>
-                      {loc.lastReportedTime ? format(new Date(loc.lastReportedTime), 'dd MMMM yyyy HH:mm', { locale: id }) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {loc.lastReportPhotoUrl ? (
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => handleViewPhoto(loc.lastReportPhotoUrl!)}
-                          className="p-0 h-auto text-blue-500 hover:underline"
-                        >
-                          Lihat Foto
-                        </Button>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-8">
+              {satpamIds.map(userId => {
+                const satpamGroup = groupedReports[userId];
+                return (
+                  <Card key={userId} className="border-2 border-gray-200 dark:border-gray-700">
+                    <CardHeader className="bg-gray-50 dark:bg-gray-700 py-3 px-4 rounded-t-lg">
+                      <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                        Personel: {satpamGroup.satpamName}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Lokasi</TableHead>
+                            <TableHead>Waktu Laporan</TableHead>
+                            <TableHead>Foto</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {satpamGroup.reports.map(report => (
+                            <TableRow key={report.id}>
+                              <TableCell className="font-medium">{report.locations?.name || 'N/A'}</TableCell>
+                              <TableCell>
+                                {format(new Date(report.created_at), 'dd MMMM yyyy HH:mm', { locale: id })}
+                              </TableCell>
+                              <TableCell>
+                                {report.photo_url ? (
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    onClick={() => handleViewPhoto(report.photo_url!)}
+                                    className="p-0 h-auto text-blue-500 hover:underline"
+                                  >
+                                    Lihat Foto
+                                  </Button>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
