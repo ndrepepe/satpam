@@ -92,7 +92,6 @@ async function signAwsV4(
   } else {
     payloadHash = await sha256(''); // Empty string hash for no body
   }
-  // *** FIX: Add x-amz-content-sha256 to headersToSign ***
   headersToSign['x-amz-content-sha256'] = payloadHash;
 
 
@@ -140,9 +139,9 @@ async function signAwsV4(
   return {
     'Authorization': authorizationHeader,
     'x-amz-date': amzDate,
-    'x-amz-content-sha256': payloadHash, // Ensure this is also in the final headers
-    'host': host, // Ensure host is explicitly set in headers
-    ...request.headers // Include any other original headers
+    'x-amz-content-sha256': payloadHash,
+    'host': host,
+    ...request.headers
   };
 }
 
@@ -172,7 +171,7 @@ serve(async (req) => {
     console.log("Edge Function: Attempting to download photo from Supabase URL:", supabasePhotoUrl);
     const response = await fetch(supabasePhotoUrl);
     if (!response.ok) {
-      console.error(`Edge Function: Failed to download photo from Supabase: ${response.statusText}`);
+      console.error(`Edge Function: Failed to download photo from Supabase: ${response.status} ${response.statusText}`);
       throw new Error(`Failed to download photo: ${response.statusText}`);
     }
     
@@ -183,7 +182,7 @@ serve(async (req) => {
 
     // 2. Upload to R2 using direct fetch with SigV4 signing
     const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
-    const fileExtension = photoBlob.type.split('/').pop(); // Dapatkan ekstensi dari content-type
+    const fileExtension = photoBlob.type.split('/').pop();
     const r2Key = `${userId}/${locationName.replace(/\s/g, '_')}_${timestamp}.${fileExtension}`;
     const r2UploadUrl = `${R2_ENDPOINT}/${R2_BUCKET_NAME}/${r2Key}`;
 
@@ -207,6 +206,7 @@ serve(async (req) => {
       requestToSign
     );
 
+    console.log("Edge Function: Signed Headers:", JSON.stringify(signedHeaders)); // NEW LOG
     console.log("Edge Function: Attempting to upload to R2 using signed fetch...");
     const r2UploadResponse = await fetch(r2UploadUrl, {
       method: 'PUT',
