@@ -274,7 +274,7 @@ const SatpamSchedule: React.FC = () => {
       if (entry.assignedLocationIds.size === allLocationsCount) {
         locationDisplay = "Semua Lokasi";
         assignmentType = "Semua Gedung";
-      } else if (assignedToGedungBar && !assignedToGedungTimur) {
+      } else if (assignedToGedungBarat && !assignedToGedungTimur) { // Fixed typo here
         locationDisplay = "Gedung Barat";
         assignmentType = "Gedung Barat";
       } else if (assignedToGedungTimur && !assignedToGedungBarat) {
@@ -578,7 +578,7 @@ const SatpamSchedule: React.FC = () => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+        const worksheet = XLSX.Sheets[sheetName];
         
         // Read data as array of arrays to get headers and rows
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
