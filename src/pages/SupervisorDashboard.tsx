@@ -89,20 +89,19 @@ const SupervisorDashboard = () => {
           return;
         }
 
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
+        // Create a Date object representing 06:00 AM on the selected calendar date, in the *local* timezone.
+        // The .toISOString() method will then correctly convert this local time to its UTC equivalent.
+        const localStartOfCheckingDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 6, 0, 0);
 
-        // Define the start of the "checking day" in GMT+7 (06:00 AM on the selected calendar date)
-        let startOfCheckingDayGMT7 = new Date(selectedDate);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
+        // The UTC start time for the "checking day" (06:00 AM GMT+7)
+        const startOfCheckingDayUTC = localStartOfCheckingDay.toISOString();
 
-        // Convert this GMT+7 start time to UTC
-        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
-        // The end of the "checking day" is exactly 24 hours after its start
-        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+        // The UTC end time for the "checking day" (24 hours after the start)
+        const endOfCheckingDayUTC = new Date(localStartOfCheckingDay.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
         console.log(`SupervisorDashboard: Selected Date (Calendar): ${format(selectedDate, 'yyyy-MM-dd')}`);
-        console.log(`SupervisorDashboard: Checking Day (GMT+7): ${format(startOfCheckingDayGMT7, 'yyyy-MM-dd HH:mm:ss', { locale: id })} to ${format(new Date(endOfCheckingDayUTC.getTime() + (offsetGMT7ToUTC * 60 * 60 * 1000) - 1), 'yyyy-MM-dd HH:mm:ss', { locale: id })}`);
-        console.log(`SupervisorDashboard: Supabase Query UTC Range: GTE ${startOfCheckingDayUTC.toISOString()} AND LT ${endOfCheckingDayUTC.toISOString()}`);
+        console.log(`SupervisorDashboard: Local Start of Checking Day (06:00 AM): ${localStartOfCheckingDay.toLocaleString()}`);
+        console.log(`SupervisorDashboard: Supabase Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
 
 
         // 3. Fetch reports for the selected "checking day"
@@ -115,8 +114,8 @@ const SupervisorDashboard = () => {
             created_at,
             profiles (first_name, last_name)
           `)
-          .gte('created_at', startOfCheckingDayUTC.toISOString())
-          .lt('created_at', endOfCheckingDayUTC.toISOString())
+          .gte('created_at', startOfCheckingDayUTC)
+          .lt('created_at', endOfCheckingDayUTC)
           .order('created_at', { ascending: false });
 
         if (reportsTodayError) {
@@ -207,12 +206,12 @@ const SupervisorDashboard = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  initialFocus
-                />
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                  />
               </PopoverContent>
             </Popover>
           </div>

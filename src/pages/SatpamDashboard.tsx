@@ -13,16 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge'; // Import Badge component
-import { Input } from '@/components/ui/input'; // Import Input component
-import { format } from 'date-fns'; // Import format from date-fns
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { format } from 'date-fns';
 
 interface Location {
   id: string;
   name: string;
   qr_code_data: string;
   created_at: string;
-  isCheckedToday?: boolean; // Menambahkan properti baru
+  isCheckedToday?: boolean;
 }
 
 interface CheckAreaReport {
@@ -36,8 +36,8 @@ const SatpamDashboard = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [isSatpam, setIsSatpam] = useState(false);
-  const [isScheduledToday, setIsScheduledToday] = useState(false); // State baru untuk status jadwal
-  const [searchQuery, setSearchQuery] = useState(''); // State baru untuk query pencarian
+  const [isScheduledToday, setIsScheduledToday] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -67,22 +67,25 @@ const SatpamDashboard = () => {
 
         // Calculate the "checking day" based on 06:00 AM GMT+7
         const now = new Date();
-        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
+        
+        // Create a Date object representing the current time in GMT+7
+        // This is done by taking current UTC time and adding 7 hours.
+        // Note: getTimezoneOffset() gives offset in minutes from UTC to local time.
+        // So, (now.getTimezoneOffset() * 60 * 1000) converts local time to UTC.
+        // Then, adding (7 * 60 * 60 * 1000) shifts it to GMT+7.
+        const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
 
-        // Get current time in GMT+7
-        const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (offsetGMT7ToUTC * 60 * 60 * 1000));
-
-        let startOfCheckingDayGMT7 = new Date(currentGMT7Time);
-        startOfCheckingDayGMT7.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7
+        // Determine the calendar date for the "checking day" (06:00 AM GMT+7)
+        let targetCalendarDateForSchedule = new Date(currentGMT7Time);
+        targetCalendarDateForSchedule.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7 (local time)
 
         // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
         if (currentGMT7Time.getHours() < 6) {
-          startOfCheckingDayGMT7.setDate(startOfCheckingDayGMT7.getDate() - 1);
+          targetCalendarDateForSchedule.setDate(targetCalendarDateForSchedule.getDate() - 1);
         }
         
-        // Format this target date to YYYY-MM-DD for the database query
-        // FIX: Use startOfCheckingDayGMT7 instead of undefined targetScheduleDate
-        const formattedTargetScheduleDate = format(startOfCheckingDayGMT7, 'yyyy-MM-dd');
+        // Format this target date to YYYY-MM-DD for the database query (for 'schedules' table)
+        const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
         console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
         // --- NEW: Check if the user is scheduled for today ---
@@ -90,7 +93,7 @@ const SatpamDashboard = () => {
           .from('schedules')
           .select('id')
           .eq('user_id', user.id)
-          .eq('schedule_date', formattedTargetScheduleDate) // Directly query the date
+          .eq('schedule_date', formattedTargetScheduleDate)
           .limit(1);
 
         if (scheduleError) {
@@ -106,7 +109,7 @@ const SatpamDashboard = () => {
           setIsScheduledToday(false);
           setLoadingLocations(false);
           toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
-          return; // Stop here if not scheduled
+          return;
         }
         setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
 
@@ -123,17 +126,25 @@ const SatpamDashboard = () => {
           return;
         }
 
-        // Fetch reports for the current user within the defined "checking day"
-        // For reports, we still need the full timestamp range
-        const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
-        const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+        // For reports, we need the full timestamp range based on the determined 'checking day'
+        // Create a Date object representing 06:00 AM on the target calendar date, in the *local* timezone.
+        // The .toISOString() method will then correctly convert this local time to its UTC equivalent.
+        const localStartOfCheckingDayForReports = new Date(targetCalendarDateForSchedule.getFullYear(), targetCalendarDateForSchedule.getMonth(), targetCalendarDateForSchedule.getDate(), 6, 0, 0);
 
+        // The UTC start time for the "checking day" (06:00 AM GMT+7)
+        const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
+        // The UTC end time for the "checking day" (24 hours after the start)
+        const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
+
+        console.log(`SatpamDashboard: Reports Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
+
+        // Fetch reports for the current user within the defined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, created_at')
           .eq('user_id', user.id)
-          .gte('created_at', startOfCheckingDayUTC.toISOString())
-          .lt('created_at', endOfCheckingDayUTC.toISOString());
+          .gte('created_at', startOfCheckingDayUTC)
+          .lt('created_at', endOfCheckingDayUTC);
 
         if (reportsError) {
           console.error("Error fetching reports:", reportsError);
@@ -178,7 +189,7 @@ const SatpamDashboard = () => {
   }
 
   if (!isSatpam) {
-    return null; // Akan dialihkan oleh useEffect jika bukan satpam
+    return null;
   }
 
   return (
