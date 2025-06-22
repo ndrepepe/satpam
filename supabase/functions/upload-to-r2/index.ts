@@ -198,6 +198,7 @@ serve(async (req) => {
       body: photoUint8Array,
     };
 
+    console.log("Edge Function: Before signAwsV4 call.");
     const signedHeaders = await signAwsV4(
       R2_ACCESS_KEY_ID,
       R2_SECRET_ACCESS_KEY,
@@ -205,9 +206,9 @@ serve(async (req) => {
       's3',   // Service name for S3 compatible APIs
       requestToSign
     );
-
-    console.log("Edge Function: Signed Headers:", JSON.stringify(signedHeaders)); // NEW LOG
-    console.log("Edge Function: Attempting to upload to R2 using signed fetch...");
+    console.log("Edge Function: After signAwsV4 call. Signed Headers:", JSON.stringify(signedHeaders));
+    
+    console.log("Edge Function: Before R2 fetch call.");
     const r2UploadResponse = await fetch(r2UploadUrl, {
       method: 'PUT',
       headers: signedHeaders,
