@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { signAwsV4 } from "https://deno.land/x/aws_s3_presign@v0.2.0/mod.ts";
+import { S3Client, PutObjectCommand } from 'https://esm.sh/@aws-sdk/client-s3@3.621.0'; // Mengganti modul presign dengan AWS SDK S3
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,57 +46,44 @@ serve(async (req) => {
     const photoBuffer = await photoResponse.arrayBuffer();
     console.log(`Edge Function: Photo downloaded successfully. Size: ${photoBuffer.byteLength} bytes.`);
 
-    // 2. Upload to Cloudflare R2
+    // 2. Upload to Cloudflare R2 using AWS SDK
     const bucketName = 'satpam'; // Your R2 bucket name
     const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
-    const r2TargetKey = `${userId}/${locationName.replace(/\s/g, '_')}_${timestamp}.jpeg`; // Ensure valid key name
-    const r2UploadUrl = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}/${r2TargetKey}`;
-    const contentType = 'image/jpeg'; // Assuming JPEG, adjust if needed
+    const r2TargetKey = `${userId}/${locationName.replace(/\s/g, '_')}_${timestamp}.jpeg`; // Pastikan nama kunci valid
+    const contentType = 'image/jpeg'; // Asumsi JPEG, sesuaikan jika perlu
 
     console.log(`Edge Function: R2 Target Key: ${r2TargetKey}`);
-    console.log(`Edge Function: R2 Upload URL: ${r2UploadUrl}`);
 
-    console.log("Edge Function: Before signAwsV4 call.");
-    const signedHeaders = await signAwsV4({
-      url: r2UploadUrl,
-      method: 'PUT',
-      accessKeyId: R2_ACCESS_KEY_ID,
-      secretAccessKey: R2_SECRET_ACCESS_KEY,
-      region: 'auto', // R2 uses 'auto' or a specific region if you set it up
-      service: 's3',
-      body: photoBuffer,
-      headers: {
-        'Content-Type': contentType,
+    const s3Client = new S3Client({
+      region: 'auto', // R2 menggunakan 'auto' atau wilayah spesifik jika Anda mengaturnya
+      endpoint: `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
+      forcePathStyle: true, // Penting untuk kompatibilitas R2
     });
-    console.log("Edge Function: After signAwsV4 call. Signed Headers:", JSON.stringify(signedHeaders));
 
-    console.log("Edge Function: Before R2 fetch call.");
-    // Create the Request object to log its details
-    const request = new Request(r2UploadUrl, {
-      method: 'PUT',
-      headers: signedHeaders,
-      body: photoBuffer,
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: r2TargetKey,
+      Body: new Uint8Array(photoBuffer), // Konversi ArrayBuffer ke Uint8Array
+      ContentType: contentType,
     });
-    console.log("Edge Function: R2 Request URL:", request.url);
-    console.log("Edge Function: R2 Request Method:", request.method);
-    console.log("Edge Function: R2 Request Headers:", JSON.stringify(Object.fromEntries(request.headers.entries())));
-    // Note: Logging request.body directly is not feasible as it's a stream and can only be read once.
 
-    const response = await fetch(request);
-    console.log("Edge Function: After R2 fetch call. Response status:", response.status);
+    console.log("Edge Function: Before sending PutObjectCommand to R2.");
+    const r2UploadResponse = await s3Client.send(putCommand);
+    console.log("Edge Function: After sending PutObjectCommand. Response:", JSON.stringify(r2UploadResponse));
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Edge Function: R2 Upload failed with status ${response.status}: ${errorText}`);
-      throw new Error(`Failed to upload photo to R2: ${response.status} - ${errorText}`);
+    if (r2UploadResponse.$metadata.httpStatusCode !== 200) {
+      throw new Error(`Failed to upload photo to R2. Status: ${r2UploadResponse.$metadata.httpStatusCode}`);
     }
     console.log("Edge Function: Photo uploaded to R2 successfully.");
 
     // 3. Delete photo from Supabase Storage
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use service role key for admin operations
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Gunakan service role key untuk operasi admin
       {
         auth: {
           autoRefreshToken: false,
@@ -107,17 +94,17 @@ serve(async (req) => {
 
     const { error: deleteError } = await supabaseClient.storage
       .from('check-area-photos')
-      .remove([`${userId}/${photoId}`]); // Use the original photoId (filename)
+      .remove([`${userId}/${photoId}`]); // Gunakan photoId asli (nama file)
 
     if (deleteError) {
       console.error("Edge Function: Error deleting photo from Supabase Storage:", deleteError);
-      // Don't throw error here, as R2 upload was successful. Just log.
+      // Jangan lempar error di sini, karena unggahan R2 sudah berhasil. Cukup log.
     } else {
       console.log("Edge Function: Photo deleted from Supabase Storage successfully.");
     }
 
     // 4. Return R2 public URL
-    const r2PublicUrl = `https://pub-${CLOUDFLARE_ACCOUNT_ID}.r2.dev/${bucketName}/${r2TargetKey}`; // Public URL format
+    const r2PublicUrl = `https://pub-${CLOUDFLARE_ACCOUNT_ID}.r2.dev/${bucketName}/${r2TargetKey}`; // Format URL Publik R2
     console.log(`Edge Function: R2 Public URL: ${r2PublicUrl}`);
 
     return new Response(JSON.stringify({ r2PublicUrl }), {
