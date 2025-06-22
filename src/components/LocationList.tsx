@@ -17,6 +17,7 @@ interface Location {
   name: string;
   qr_code_data: string;
   created_at: string;
+  posisi_gedung?: string | null; // Tambahkan field baru
 }
 
 interface LocationListProps {
@@ -27,13 +28,13 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Mener
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<{ id: string; name: string } | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<{ id: string; name: string; posisi_gedung?: string | null } | null>(null);
 
   const fetchLocations = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('locations')
-      .select('id, name, qr_code_data, created_at')
+      .select('id, name, qr_code_data, created_at, posisi_gedung') // Pilih field baru
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -69,7 +70,7 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Mener
     }
   };
 
-  const handleEditLocation = (location: { id: string; name: string }) => {
+  const handleEditLocation = (location: { id: string; name: string; posisi_gedung?: string | null }) => {
     setSelectedLocation(location);
     setIsEditModalOpen(true);
   };
@@ -90,6 +91,7 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Mener
         <TableHeader>
           <TableRow>
             <TableHead>Nama Lokasi</TableHead>
+            <TableHead>Posisi Gedung</TableHead> {/* Kolom baru */}
             <TableHead>QR Code</TableHead>
             <TableHead>Dibuat Pada</TableHead>
             <TableHead className="text-right">Aksi</TableHead>
@@ -99,6 +101,7 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Mener
           {locations.map((loc) => (
             <TableRow key={loc.id}>
               <TableCell className="font-medium">{loc.name}</TableCell>
+              <TableCell>{loc.posisi_gedung || '-'}</TableCell> {/* Tampilkan posisi gedung */}
               <TableCell>
                 <Button
                   variant="link"
@@ -114,7 +117,7 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Mener
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleEditLocation({ id: loc.id, name: loc.name })}
+                  onClick={() => handleEditLocation({ id: loc.id, name: loc.name, posisi_gedung: loc.posisi_gedung })}
                   className="mr-2"
                 >
                   Edit

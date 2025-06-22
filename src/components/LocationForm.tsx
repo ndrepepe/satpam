@@ -8,9 +8,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const locationSchema = z.object({
   name: z.string().min(1, "Nama lokasi wajib diisi"),
+  posisi_gedung: z.enum(["Gedung Barat", "Gedung Timur"], {
+    required_error: "Posisi gedung wajib dipilih",
+  }),
 });
 
 type LocationFormValues = z.infer<typeof locationSchema>;
@@ -24,6 +28,7 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
     resolver: zodResolver(locationSchema),
     defaultValues: {
       name: '',
+      posisi_gedung: undefined, // Set to undefined initially
     },
   });
 
@@ -34,7 +39,7 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
 
       const { data, error } = await supabase
         .from('locations')
-        .insert({ name: values.name, qr_code_data: qrData })
+        .insert({ name: values.name, qr_code_data: qrData, posisi_gedung: values.posisi_gedung })
         .select()
         .single();
 
@@ -63,6 +68,27 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
               <FormControl>
                 <Input placeholder="Contoh: Pos Utama, Gudang A" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="posisi_gedung"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Posisi Gedung</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih posisi gedung" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
+                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
