@@ -41,6 +41,7 @@ interface SatpamProfile {
 interface Location {
   id: string;
   name: string;
+  posisi_gedung?: string | null; // Tambahkan field baru
 }
 
 interface ScheduleEntry {
@@ -73,6 +74,7 @@ const SatpamSchedule: React.FC = () => {
   const [locationList, setLocationList] = useState<Location[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
+  const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung'); // New state for building position
   const [loading, setLoading] = useState(true);
 
   // State for Reassign Dialog
@@ -119,7 +121,7 @@ const SatpamSchedule: React.FC = () => {
 
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
-        .select('id, name');
+        .select('id, name, posisi_gedung'); // Fetch posisi_gedung
 
       if (locationError) throw locationError;
       setLocationList(locationData);
@@ -299,12 +301,20 @@ const SatpamSchedule: React.FC = () => {
 
 
   const handleSaveSchedule = async () => {
-    if (!selectedDate || !selectedSatpamId) {
-      toast.error("Harap lengkapi semua bidang: Tanggal dan Personel.");
+    if (!selectedDate || !selectedSatpamId || !selectedBuildingPosition) {
+      toast.error("Harap lengkapi semua bidang: Tanggal, Personel, dan Posisi Gedung.");
       return;
     }
-    if (locationList.length === 0) {
-      toast.error("Tidak ada lokasi yang terdaftar untuk dijadwalkan.");
+    
+    let locationsToAssign: Location[] = [];
+    if (selectedBuildingPosition === 'Semua Gedung') {
+      locationsToAssign = locationList;
+    } else {
+      locationsToAssign = locationList.filter(loc => loc.posisi_gedung === selectedBuildingPosition);
+    }
+
+    if (locationsToAssign.length === 0) {
+      toast.error(`Tidak ada lokasi yang terdaftar untuk ${selectedBuildingPosition}.`);
       return;
     }
 
@@ -328,7 +338,7 @@ const SatpamSchedule: React.FC = () => {
       }
 
       const schedulesToInsert = [];
-      for (const location of locationList) {
+      for (const location of locationsToAssign) {
         schedulesToInsert.push({
           schedule_date: formattedDate,
           user_id: selectedSatpamId,
@@ -342,8 +352,9 @@ const SatpamSchedule: React.FC = () => {
 
       if (error) throw error;
 
-      toast.success("Jadwal berhasil ditambahkan untuk semua lokasi!");
+      toast.success(`Jadwal berhasil ditambahkan untuk ${selectedBuildingPosition}!`);
       setSelectedSatpamId(undefined);
+      setSelectedBuildingPosition('Semua Gedung'); // Reset building position
       if (selectedDate) {
         fetchSchedules(selectedDate);
       }
@@ -642,7 +653,7 @@ const SatpamSchedule: React.FC = () => {
           <CardTitle>Tambah Jadwal Baru</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* Changed to grid for better layout */}
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Tanggal</label>
               <Popover>
@@ -683,9 +694,22 @@ const SatpamSchedule: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Posisi Gedung</label>
+              <Select onValueChange={setSelectedBuildingPosition} value={selectedBuildingPosition}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pilih Gedung" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
+                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
+                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>
-            {loading ? "Menyimpan..." : "Simpan Jadwal untuk Semua Lokasi"}
+            {loading ? "Menyimpan..." : "Simpan Jadwal"}
           </Button>
         </CardContent>
       </Card>
