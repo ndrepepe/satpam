@@ -21,21 +21,21 @@ const Navbar = () => {
 
   return (
     <nav className="bg-gray-800 text-white p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-xl font-bold">Satpam App</Link>
-        <div className="flex items-center space-x-4">
+      <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+        <Link to="/" className="text-xl font-bold mb-2 sm:mb-0">Satpam App</Link>
+        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
           {!sessionLoading && user && (
-            <span className="text-sm text-gray-300">
+            <span className="text-sm text-gray-300 text-center sm:text-left">
               {user.email}
             </span>
           )}
           {session ? (
-            <Button onClick={handleLogout} variant="ghost" className="text-white hover:bg-gray-700">
+            <Button onClick={handleLogout} variant="ghost" className="text-white hover:bg-gray-700 w-full sm:w-auto">
               Logout
             </Button>
           ) : (
-            <Link to="/login">
-              <Button variant="ghost" className="text-white hover:bg-gray-700">
+            <Link to="/login" className="w-full sm:w-auto">
+              <Button variant="ghost" className="text-white hover:bg-gray-700 w-full">
                 Login
               </Button>
             </Link>
