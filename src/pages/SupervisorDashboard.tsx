@@ -21,33 +21,57 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+
+interface SatpamProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+}
+
+interface Location {
+  id: string;
+  name: string;
+}
+
+interface ScheduleEntry {
+  user_id: string;
+  location_id: string;
+}
 
 interface ReportEntry {
   id: string;
   location_id: string;
   photo_url: string;
   created_at: string;
-  user_id: string; // Tambahkan user_id untuk filtering
-  profiles: { id: string; first_name: string; last_name: string } | null; // Tambahkan id di profiles
-  locations: { name: string } | null;
+  user_id: string;
 }
 
-interface SatpamOnDuty {
-  id: string;
-  name: string;
+interface LocationStatus {
+  locationId: string;
+  locationName: string;
+  status: 'Sudah Dicek' | 'Belum Dicek';
+  reportTime: string | null;
+  photoUrl: string | null;
+}
+
+interface SatpamTabContent {
+  satpamId: string;
+  satpamName: string;
+  locationsStatus: LocationStatus[];
 }
 
 const SupervisorDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
   const navigate = useNavigate();
   const [isSupervisor, setIsSupervisor] = useState(false);
-  const [allReports, setAllReports] = useState<ReportEntry[]>([]); // Semua laporan untuk tanggal yang dipilih
-  const [loadingReports, setLoadingReports] = useState(true);
+  const [satpamTabContents, setSatpamTabContents] = useState<SatpamTabContent[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [activeTab, setActiveTab] = useState<string>('all'); // 'all' atau user_id satpam
-  const [satpamOnDuty, setSatpamOnDuty] = useState<SatpamOnDuty[]>([]); // Daftar satpam yang bertugas
+  const [activeTab, setActiveTab] = useState<string>(''); // Will be set to the first satpam's ID
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -58,7 +82,7 @@ const SupervisorDashboard = () => {
       return;
     }
 
-    const checkUserRoleAndFetchReports = async () => {
+    const checkUserRoleAndFetchData = async () => {
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -76,61 +100,121 @@ const SupervisorDashboard = () => {
         setIsSupervisor(true);
 
         if (!selectedDate) {
-          setLoadingReports(false);
-          setAllReports([]);
-          setSatpamOnDuty([]);
+          setLoadingData(false);
+          setSatpamTabContents([]);
+          setActiveTab('');
           return;
         }
 
-        const localStartOfCheckingDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 6, 0, 0);
-        const startOfCheckingDayUTC = localStartOfCheckingDay.toISOString();
-        const endOfCheckingDayUTC = new Date(localStartOfCheckingDay.getTime() + (24 * 60 * 60 * 1000)).toISOString();
+        setLoadingData(true);
+        try {
+          // Calculate the "checking day" based on 06:00 AM GMT+7
+          const localStartOfCheckingDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 6, 0, 0);
+          const startOfCheckingDayUTC = localStartOfCheckingDay.toISOString();
+          const endOfCheckingDayUTC = new Date(localStartOfCheckingDay.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
-        setLoadingReports(true);
-        const { data: reportsData, error: reportsError } = await supabase
-          .from('check_area_reports')
-          .select(`
-            id,
-            location_id,
-            photo_url,
-            created_at,
-            user_id,
-            profiles (id, first_name, last_name),
-            locations (name)
-          `)
-          .gte('created_at', startOfCheckingDayUTC)
-          .lt('created_at', endOfCheckingDayUTC)
-          .order('created_at', { ascending: false });
+          // 1. Fetch all necessary data concurrently
+          const [profilesRes, locationsRes, schedulesRes, reportsRes] = await Promise.all([
+            supabase.from('profiles').select('id, first_name, last_name, role'),
+            supabase.from('locations').select('id, name'),
+            supabase.from('schedules').select('user_id, location_id').eq('schedule_date', format(selectedDate, 'yyyy-MM-dd')),
+            supabase.from('check_area_reports').select('user_id, location_id, photo_url, created_at')
+              .gte('created_at', startOfCheckingDayUTC)
+              .lt('created_at', endOfCheckingDayUTC),
+          ]);
 
-        if (reportsError) {
-          console.error("Error fetching reports for selected date:", reportsError);
-          toast.error(`Gagal memuat laporan untuk tanggal ini: ${reportsError.message}`);
-          setLoadingReports(false);
-          return;
-        }
+          if (profilesRes.error) throw profilesRes.error;
+          if (locationsRes.error) throw locationsRes.error;
+          if (schedulesRes.error) throw schedulesRes.error;
+          if (reportsRes.error) throw reportsRes.error;
 
-        setAllReports(reportsData);
+          const allProfiles: SatpamProfile[] = profilesRes.data;
+          const allLocations: Location[] = locationsRes.data;
+          const schedulesForDate: ScheduleEntry[] = schedulesRes.data;
+          const reportsForDate: ReportEntry[] = reportsRes.data;
 
-        // Extract unique satpam who made reports
-        const uniqueSatpam = new Map<string, SatpamOnDuty>();
-        reportsData.forEach(report => {
-          if (report.profiles && !uniqueSatpam.has(report.profiles.id)) {
-            uniqueSatpam.set(report.profiles.id, {
-              id: report.profiles.id,
-              name: `${report.profiles.first_name} ${report.profiles.last_name}`,
+          // Create maps for quick lookups
+          const profileMap = new Map(allProfiles.map(p => [p.id, p]));
+          const locationMap = new Map(allLocations.map(l => [l.id, l.name]));
+
+          // Group reports by user and location for easy lookup
+          const checkedStatusMap = new Map<string, { photoUrl: string; reportTime: string }>(); // Key: `${userId}-${locationId}`
+          reportsForDate.forEach(report => {
+            checkedStatusMap.set(`${report.user_id}-${report.location_id}`, {
+              photoUrl: report.photo_url,
+              reportTime: report.created_at,
             });
+          });
+
+          // Determine unique satpam on duty from schedules
+          const satpamOnDutyIds = new Set<string>();
+          schedulesForDate.forEach(s => satpamOnDutyIds.add(s.user_id));
+
+          const newSatpamTabContents: SatpamTabContent[] = [];
+
+          satpamOnDutyIds.forEach(satpamId => {
+            const satpamProfile = profileMap.get(satpamId);
+            if (!satpamProfile || satpamProfile.role !== 'satpam') return; // Ensure it's a satpam profile
+
+            const satpamName = `${satpamProfile.first_name} ${satpamProfile.last_name}`;
+
+            const locationsAssignedToThisSatpam = schedulesForDate.filter(s => s.user_id === satpamId);
+            const locationsStatus: LocationStatus[] = [];
+
+            // Get unique locations assigned to this satpam for the day
+            const uniqueAssignedLocationIds = new Set(locationsAssignedToThisSatpam.map(s => s.location_id));
+
+            uniqueAssignedLocationIds.forEach(locationId => {
+              const locationName = locationMap.get(locationId) || 'Lokasi Tidak Dikenal';
+              const checkInfo = checkedStatusMap.get(`${satpamId}-${locationId}`);
+
+              locationsStatus.push({
+                locationId,
+                locationName,
+                status: checkInfo ? 'Sudah Dicek' : 'Belum Dicek',
+                reportTime: checkInfo?.reportTime || null,
+                photoUrl: checkInfo?.photoUrl || null,
+              });
+            });
+
+            // Sort locations alphabetically by name
+            locationsStatus.sort((a, b) => a.locationName.localeCompare(b.locationName));
+
+            newSatpamTabContents.push({
+              satpamId,
+              satpamName,
+              locationsStatus,
+            });
+          });
+
+          // Sort satpam tabs by name
+          newSatpamTabContents.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
+
+          setSatpamTabContents(newSatpamTabContents);
+          // Set active tab to the first satpam if available
+          if (newSatpamTabContents.length > 0 && activeTab === '') { // Only set if no tab is active yet
+            setActiveTab(newSatpamTabContents[0].satpamId);
+          } else if (newSatpamTabContents.length > 0 && !newSatpamTabContents.some(tab => tab.satpamId === activeTab)) {
+            // If current active tab is no longer valid (e.g., satpam not on duty today), reset to first
+            setActiveTab(newSatpamTabContents[0].satpamId);
+          } else if (newSatpamTabContents.length === 0) {
+            setActiveTab(''); // No satpam on duty, no active tab
           }
-        });
-        setSatpamOnDuty(Array.from(uniqueSatpam.values()));
-        setLoadingReports(false);
+
+        } catch (error: any) {
+          toast.error(`Gagal memuat data: ${error.message}`);
+          console.error("Error fetching data for Supervisor Dashboard:", error);
+        } finally {
+          setLoadingData(false);
+        }
       } else {
         toast.error("Akses ditolak. Anda bukan atasan.");
         navigate('/');
       }
     };
 
-    checkUserRoleAndFetchReports();
-  }, [session, sessionLoading, user, navigate, selectedDate]);
+    checkUserRoleAndFetchData();
+  }, [session, sessionLoading, user, navigate, selectedDate, activeTab]); // Added activeTab to dependencies to re-evaluate tab selection
 
   const handleViewPhoto = (url: string) => {
     setSelectedPhotoUrl(url);
@@ -142,14 +226,7 @@ const SupervisorDashboard = () => {
     setIsPhotoModalOpen(false);
   };
 
-  const filteredReports = useMemo(() => {
-    if (activeTab === 'all') {
-      return allReports;
-    }
-    return allReports.filter(report => report.user_id === activeTab);
-  }, [allReports, activeTab]);
-
-  if (sessionLoading || loadingReports) {
+  if (sessionLoading || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <p className="text-xl text-gray-600 dark:text-gray-400">Memuat dashboard atasan...</p>
@@ -169,7 +246,7 @@ const SupervisorDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
-            <h3 className="text-xl font-semibold">Laporan Cek Area</h3>
+            <h3 className="text-xl font-semibold">Status Cek Area per Personel</h3>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -194,59 +271,69 @@ const SupervisorDashboard = () => {
             </Popover>
           </div>
           
-          {allReports.length === 0 ? (
+          {satpamTabContents.length === 0 ? (
             <p className="text-center text-gray-600 dark:text-gray-400">
-              Tidak ada laporan cek area untuk tanggal {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'yang dipilih'}.
+              Tidak ada personel yang bertugas atau laporan cek area untuk tanggal {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: id }) : 'yang dipilih'}.
             </p>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                <TabsTrigger value="all">Semua Laporan</TabsTrigger>
-                {satpamOnDuty.map(satpam => (
-                  <TabsTrigger key={satpam.id} value={satpam.id}>
-                    {satpam.name}
+                {satpamTabContents.map(satpamTab => (
+                  <TabsTrigger key={satpamTab.satpamId} value={satpamTab.satpamId}>
+                    {satpamTab.satpamName}
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <TabsContent value={activeTab} className="mt-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Personel</TableHead>
-                      <TableHead>Lokasi</TableHead>
-                      <TableHead>Waktu Laporan</TableHead>
-                      <TableHead>Foto</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredReports.map(report => (
-                      <TableRow key={report.id}>
-                        <TableCell className="font-medium">
-                          {report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'N/A'}
-                        </TableCell>
-                        <TableCell>{report.locations?.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          {format(new Date(report.created_at), 'dd MMMM yyyy HH:mm', { locale: id })}
-                        </TableCell>
-                        <TableCell>
-                          {report.photo_url ? (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={() => handleViewPhoto(report.photo_url!)}
-                              className="p-0 h-auto text-blue-500 hover:underline"
-                            >
-                              Lihat Foto
-                            </Button>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TabsContent>
+              {satpamTabContents.map(satpamTab => (
+                <TabsContent key={satpamTab.satpamId} value={satpamTab.satpamId} className="mt-4">
+                  <h4 className="text-lg font-semibold mb-3">Lokasi Tugas {satpamTab.satpamName}</h4>
+                  {satpamTab.locationsStatus.length === 0 ? (
+                    <p className="text-center text-gray-600 dark:text-gray-400">
+                      Tidak ada lokasi yang ditugaskan untuk personel ini pada tanggal ini.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Lokasi</TableHead>
+                          <TableHead>Status Cek</TableHead>
+                          <TableHead>Waktu Laporan</TableHead>
+                          <TableHead>Foto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {satpamTab.locationsStatus.map(locStatus => (
+                          <TableRow key={locStatus.locationId}>
+                            <TableCell className="font-medium">{locStatus.locationName}</TableCell>
+                            <TableCell>
+                              <Badge variant={locStatus.status === 'Sudah Dicek' ? 'default' : 'destructive'}>
+                                {locStatus.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {locStatus.reportTime ? format(new Date(locStatus.reportTime), 'HH:mm', { locale: id }) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {locStatus.photoUrl ? (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  onClick={() => handleViewPhoto(locStatus.photoUrl!)}
+                                  className="p-0 h-auto text-blue-500 hover:underline"
+                                >
+                                  Lihat Foto
+                                </Button>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </TabsContent>
+              ))}
             </Tabs>
           )}
         </CardContent>
