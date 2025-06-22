@@ -89,13 +89,21 @@ const SupervisorDashboard = () => {
           return;
         }
 
-        const offsetGMT7ToUTC = 7;
+        const offsetGMT7ToUTC = 7; // GMT+7 is 7 hours ahead of UTC
 
+        // Define the start of the "checking day" in GMT+7 (06:00 AM on the selected calendar date)
         let startOfCheckingDayGMT7 = new Date(selectedDate);
         startOfCheckingDayGMT7.setHours(6, 0, 0, 0);
 
+        // Convert this GMT+7 start time to UTC
         const startOfCheckingDayUTC = new Date(startOfCheckingDayGMT7.getTime() - (offsetGMT7ToUTC * 60 * 60 * 1000));
+        // The end of the "checking day" is exactly 24 hours after its start
         const endOfCheckingDayUTC = new Date(startOfCheckingDayUTC.getTime() + (24 * 60 * 60 * 1000));
+
+        console.log(`SupervisorDashboard: Selected Date (Calendar): ${format(selectedDate, 'yyyy-MM-dd')}`);
+        console.log(`SupervisorDashboard: Checking Day (GMT+7): ${format(startOfCheckingDayGMT7, 'yyyy-MM-dd HH:mm:ss', { locale: id })} to ${format(new Date(endOfCheckingDayUTC.getTime() + (offsetGMT7ToUTC * 60 * 60 * 1000) - 1), 'yyyy-MM-dd HH:mm:ss', { locale: id })}`);
+        console.log(`SupervisorDashboard: Supabase Query UTC Range: GTE ${startOfCheckingDayUTC.toISOString()} AND LT ${endOfCheckingDayUTC.toISOString()}`);
+
 
         // 3. Fetch reports for the selected "checking day"
         const { data: reportsTodayData, error: reportsTodayError } = await supabase
@@ -121,6 +129,7 @@ const SupervisorDashboard = () => {
         // 4. Process and combine data
         const reportsMap = new Map<string, { reporter: string; time: string; photo: string }>();
         reportsTodayData.forEach(report => {
+          console.log(`SupervisorDashboard: Fetched Report - Location ID: ${report.location_id}, Created At (UTC): ${report.created_at}`);
           if (!reportsMap.has(report.location_id) || new Date(report.created_at) > new Date(reportsMap.get(report.location_id)!.time)) {
             reportsMap.set(report.location_id, {
               reporter: report.profiles ? `${report.profiles.first_name} ${report.profiles.last_name}` : 'N/A',
@@ -153,7 +162,7 @@ const SupervisorDashboard = () => {
   }, [session, sessionLoading, user, navigate, selectedDate]);
 
   const handleViewPhoto = (url: string) => {
-    console.log("Attempting to view photo with URL:", url); // LOG INI
+    console.log("Attempting to view photo with URL:", url);
     setSelectedPhotoUrl(url);
     setIsPhotoModalOpen(true);
   };
@@ -263,10 +272,10 @@ const SupervisorDashboard = () => {
             <DialogTitle>Foto Laporan</DialogTitle>
           </DialogHeader>
           <div className="flex justify-center items-center p-4">
-            {selectedPhotoUrl ? ( // Periksa apakah selectedPhotoUrl ada sebelum merender img
+            {selectedPhotoUrl ? (
               <img src={selectedPhotoUrl} alt="Laporan Cek Area" className="max-w-full h-auto rounded-md" />
             ) : (
-              <p>Tidak ada foto untuk ditampilkan.</p> // Pesan jika URL foto kosong
+              <p>Tidak ada foto untuk ditampilkan.</p>
             )}
           </div>
         </DialogContent>
