@@ -18,7 +18,11 @@ const personnelSchema = z.object({
 
 type PersonnelFormValues = z.infer<typeof personnelSchema>;
 
-const PersonnelForm = () => {
+interface PersonnelFormProps {
+  onPersonnelAdded: () => void; // New prop for callback
+}
+
+const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
   const form = useForm<PersonnelFormValues>({
     resolver: zodResolver(personnelSchema),
     defaultValues: {
@@ -50,6 +54,7 @@ const PersonnelForm = () => {
 
       toast.success(`Personel ${values.first_name} ${values.last_name} berhasil ditambahkan!`);
       form.reset();
+      onPersonnelAdded(); // Call the callback to refresh the list
     } catch (error: any) {
       toast.error(`Gagal menambahkan personel: ${error.message}`);
       console.error("Error adding personnel:", error);

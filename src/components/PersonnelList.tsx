@@ -23,9 +23,10 @@ interface Profile {
 
 interface PersonnelListProps {
   isAdmin: boolean;
+  refreshKey: number; // New prop for refresh
 }
 
-const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
+const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) => {
   const [personnel, setPersonnel] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -59,7 +60,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
 
   useEffect(() => {
     fetchPersonnel();
-  }, []);
+  }, [refreshKey]); // Add refreshKey to dependencies
 
   const handleDeletePersonnel = async (id: string, name: string) => {
     if (!isAdmin) {
@@ -104,14 +105,6 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin }) => {
     setIsEditModalOpen(false);
     setSelectedPersonnel(null);
   };
-
-  if (loading) {
-    return <p className="text-center text-gray-600 dark:text-gray-400">Memuat daftar personel...</p>;
-  }
-
-  if (personnel.length === 0) {
-    return <p className="text-center text-gray-600 dark:text-gray-400">Belum ada personel yang terdaftar.</p>;
-  }
 
   return (
     <div className="mt-6">

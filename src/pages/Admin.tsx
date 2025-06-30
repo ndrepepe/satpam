@@ -17,6 +17,7 @@ const AdminDashboard = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [locationListRefreshKey, setLocationListRefreshKey] = useState(0);
+  const [personnelListRefreshKey, setPersonnelListRefreshKey] = useState(0); // New state for personnel list refresh
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -55,6 +56,10 @@ const AdminDashboard = () => {
     setLocationListRefreshKey(prevKey => prevKey + 1); // Increment key to trigger refresh
   };
 
+  const handlePersonnelAdded = () => {
+    setPersonnelListRefreshKey(prevKey => prevKey + 1); // Increment key to trigger refresh
+  };
+
   if (loading || profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -82,8 +87,8 @@ const AdminDashboard = () => {
             </TabsList>
             <TabsContent value="personnel" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Tambah Personel Satpam Baru</h3>
-              <PersonnelForm />
-              <PersonnelList isAdmin={isAdmin} />
+              <PersonnelForm onPersonnelAdded={handlePersonnelAdded} /> {/* Pass callback */}
+              <PersonnelList isAdmin={isAdmin} refreshKey={personnelListRefreshKey} /> {/* Pass refresh key */}
             </TabsContent>
             <TabsContent value="locations" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Buat Lokasi Baru</h3>
