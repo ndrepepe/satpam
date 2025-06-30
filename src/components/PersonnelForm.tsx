@@ -97,7 +97,7 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
             <FormItem>
               <FormLabel>Nomor ID</FormLabel>
               <FormControl>
-                <Input placeholder="Nomor ID" {...field} />
+                <Input placeholder="Nomor ID" {...field} autoComplete="off" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -110,7 +110,7 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="Email" {...field} />
+                <Input type="email" placeholder="Email" {...field} autoComplete="off" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -123,7 +123,7 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Password" {...field} />
+                <Input type="password" placeholder="Password" {...field} autoComplete="new-password" />
               </FormControl>
               <FormMessage />
             </FormItem>
