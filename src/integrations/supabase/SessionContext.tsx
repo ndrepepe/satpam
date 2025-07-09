@@ -34,9 +34,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setUser(session?.user || null);
       setLoading(false);
 
-      if (_event === 'SIGNED_IN') {
-        toast.success("Selamat datang di aplikasi SATPAM!");
-      }
+      // Menghapus notifikasi selamat datang
+      // if (_event === 'SIGNED_IN') {
+      //   toast.success("Selamat datang di aplikasi SATPAM!");
+      // }
     });
 
     return () => subscription.unsubscribe();
