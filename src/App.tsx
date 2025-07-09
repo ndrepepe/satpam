@@ -1,48 +1,70 @@
-import { Toaster } from "@/components/ui/sonner";
-import Layout from "./components/Layout"; // Mengubah dari named import menjadi default import
-import { SessionProvider } from "./integrations/supabase/SessionContext";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import CheckAreaReport from "./pages/CheckAreaReport";
-import Schedules from "./pages/Schedules";
-import Admin from "./pages/Admin";
-import PrivateRoute from "./components/PrivateRoute";
-import NotFound from "./pages/NotFound";
-import SatpamDashboard from "./pages/SatpamDashboard";
-import SupervisorDashboard from "./pages/SupervisorDashboard";
-import PrintQRCode from "./pages/PrintQRCode";
-import ScanLocation from "./pages/ScanLocation";
-
-const queryClient = new QueryClient();
+import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { SessionProvider, useSession } from './integrations/supabase/SessionContext';
+import Index from './pages/Index';
+import Login from './pages/Login';
+import Private from './pages/Private';
+import NotFound from './pages/NotFound';
+import Dashboard from './pages/Dashboard';
+import SupervisorDashboard from './pages/SupervisorDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <BrowserRouter>
-          <Toaster />
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-              <Route path="/satpam-dashboard" element={<PrivateRoute roles={['satpam']}><SatpamDashboard /></PrivateRoute>} />
-              <Route path="/supervisor-dashboard" element={<PrivateRoute roles={['atasan']}><SupervisorDashboard /></PrivateRoute>} />
-              <Route path="/check-area-report" element={<PrivateRoute roles={['satpam']}><CheckAreaReport /></PrivateRoute>} />
-              <Route path="/schedules" element={<PrivateRoute><Schedules /></PrivateRoute>} />
-              <Route path="/admin" element={<PrivateRoute roles={['admin']}><Admin /></PrivateRoute>} />
-              <Route path="/print-qr/:id" element={<PrivateRoute roles={['admin']}><PrintQRCode /></PrivateRoute>} />
-              <Route path="/scan-location" element={<PrivateRoute roles={['satpam']}><ScanLocation /></PrivateRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
-        </BrowserRouter>
-      </SessionProvider>
-    </QueryClientProvider>
+    <SessionProvider>
+      <Toaster />
+      <Router>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/private"
+            element={
+              <PrivateRoute>
+                <Private />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/supervisor-dashboard"
+            element={
+              <PrivateRoute>
+                <SupervisorDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard"
+            element={
+              <PrivateRoute>
+                <AdminDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </SessionProvider>
   );
 }
+
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  const { session, loading } = useSession();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Memuat...</div>;
+  }
+
+  return session ? <>{children}</> : <Navigate to="/login" />;
+};
 
 export default App;
