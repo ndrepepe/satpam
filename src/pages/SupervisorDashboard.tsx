@@ -21,7 +21,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import CheckAreaReportsTable from '@/components/CheckAreaReportsTable'; // Import CheckAreaReportsTable
 
 interface Location {
   id: string;
@@ -33,8 +32,8 @@ interface Location {
 interface CheckAreaReport {
   location_id: string;
   created_at: string;
-  user_id: string; // Ensure user_id is included for filtering reports
-  photo_url: string; // Tambahkan photo_url di sini
+  user_id: string;
+  photo_url: string;
 }
 
 interface ScheduleEntry {
@@ -49,13 +48,13 @@ interface ScheduleEntry {
 interface SatpamTab {
   satpamId: string;
   satpamName: string;
-  locationDisplay: string; // Added this field
+  locationDisplay: string;
   locationsStatus: {
     location: Location;
     isCheckedToday: boolean;
     lastCheckedAt: string | null;
+    photoUrl: string | null; // Menambahkan photoUrl di sini
   }[];
-  reportsForToday: CheckAreaReport[]; // Tambahkan ini untuk laporan per satpam
 }
 
 const SupervisorDashboard = () => {
@@ -144,7 +143,9 @@ const SupervisorDashboard = () => {
         // Fetch reports for the determined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
-          .select('location_id, user_id, created_at, photo_url'); // <--- MENAMBAHKAN photo_url DI SINI
+          .select('location_id, user_id, created_at, photo_url')
+          .gte('created_at', startOfCheckingDayUTC) // Filter by date range
+          .lt('created_at', endOfCheckingDayUTC); // Filter by date range
 
         if (reportsError) throw reportsError;
         setReports(reportsData);
@@ -164,13 +165,13 @@ const SupervisorDashboard = () => {
     const groupedBySatpam = new Map<string, {
       satpamId: string;
       satpamName: string;
-      assignedLocationIds: Set<string>; // To calculate locationDisplay
+      assignedLocationIds: Set<string>;
       locationsStatus: {
         location: Location;
         isCheckedToday: boolean;
         lastCheckedAt: string | null;
+        photoUrl: string | null; // Menambahkan photoUrl di sini
       }[];
-      reportsForToday: CheckAreaReport[]; // Inisialisasi array laporan
     }>();
 
     schedules.forEach(schedule => {
@@ -184,51 +185,27 @@ const SupervisorDashboard = () => {
           satpamName,
           assignedLocationIds: new Set(),
           locationsStatus: [],
-          reportsForToday: [], // Pastikan ini diinisialisasi
         });
       }
 
       const satpamEntry = groupedBySatpam.get(satpamId)!;
-      satpamEntry.assignedLocationIds.add(schedule.location_id); // Add to set for locationDisplay calculation
+      satpamEntry.assignedLocationIds.add(schedule.location_id);
 
       if (location) {
+        // Find the report for this specific user and location on the selected date
         const report = reports.find(r => r.user_id === satpamId && r.location_id === location.id);
+        
         satpamEntry.locationsStatus.push({
           location: location,
           isCheckedToday: !!report,
           lastCheckedAt: report ? format(new Date(report.created_at), 'HH:mm', { locale: idLocale }) : null,
+          photoUrl: report?.photo_url || null, // Ambil photo_url dari laporan
         });
       }
     });
 
-    // Filter reports for each satpam and add to their entry
-    reports.forEach(report => {
-      const satpamEntry = groupedBySatpam.get(report.user_id);
-      if (satpamEntry) {
-        // Check if the report falls within the selected date's "checking day"
-        const formattedSelectedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-        const reportDate = format(new Date(report.created_at), 'yyyy-MM-dd');
-
-        // This logic needs to match the SatpamDashboard's "checking day" logic
-        const reportDateTime = new Date(report.created_at);
-        const reportGMT7Time = new Date(reportDateTime.getTime() + (reportDateTime.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
-        let reportTargetCalendarDate = new Date(reportGMT7Time);
-        reportTargetCalendarDate.setHours(6, 0, 0, 0); 
-        if (reportGMT7Time.getHours() < 6) {
-          reportTargetCalendarDate.setDate(reportTargetCalendarDate.getDate() - 1);
-        }
-        const formattedReportTargetDate = format(reportTargetCalendarDate, 'yyyy-MM-dd');
-
-        if (formattedReportTargetDate === formattedSelectedDate) {
-          satpamEntry.reportsForToday.push(report);
-        }
-      }
-    });
-
-
     const result: SatpamTab[] = [];
     groupedBySatpam.forEach(entry => {
-      // Calculate locationDisplay here
       let locationDisplay: string;
       const allLocationsCount = locationList.length;
       const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
@@ -259,7 +236,6 @@ const SupervisorDashboard = () => {
         satpamName: entry.satpamName,
         locationDisplay: locationDisplay,
         locationsStatus: entry.locationsStatus.sort((a, b) => a.location.name.localeCompare(b.location.name)),
-        reportsForToday: entry.reportsForToday.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), // Sort reports by time
       });
     });
 
@@ -341,6 +317,7 @@ const SupervisorDashboard = () => {
                             <TableHead className="text-center">Posisi Gedung</TableHead>
                             <TableHead className="text-center">Status Cek</TableHead>
                             <TableHead className="text-center">Terakhir Dicek</TableHead>
+                            <TableHead className="text-center">Foto</TableHead> {/* Kolom Foto baru */}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -356,14 +333,26 @@ const SupervisorDashboard = () => {
                                 )}
                               </TableCell>
                               <TableCell className="text-center">{status.lastCheckedAt || '-'}</TableCell>
+                              <TableCell className="text-center">
+                                {status.photoUrl ? (
+                                  <a 
+                                    href={status.photoUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    Lihat Foto
+                                  </a>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
                   )}
-                  {/* Menambahkan komponen CheckAreaReportsTable di sini */}
-                  <CheckAreaReportsTable reports={satpamTab.reportsForToday} />
                 </TabsContent>
               ))}
             </Tabs>
