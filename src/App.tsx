@@ -6,7 +6,7 @@ import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
-import AdminDashboard from './pages/AdminDashboard';
+import Admin from './pages/Admin'; // Mengubah import dari AdminDashboard menjadi Admin
 import { Toaster } from 'sonner';
 
 function App() {
@@ -17,15 +17,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
-          {/* Menghapus rute /private karena file Private.tsx tidak ada */}
-          {/* <Route
-            path="/private"
-            element={
-              <PrivateRoute>
-                <Private />
-              </PrivateRoute>
-            }
-          /> */}
           <Route
             path="/dashboard"
             element={
@@ -43,10 +34,10 @@ function App() {
             }
           />
           <Route
-            path="/admin-dashboard"
+            path="/admin-dashboard" // Rute tetap sama, hanya komponen yang diubah
             element={
               <PrivateRoute>
-                <AdminDashboard />
+                <Admin /> {/* Mengubah komponen yang dirender dari AdminDashboard menjadi Admin */}
               </PrivateRoute>
             }
           />
