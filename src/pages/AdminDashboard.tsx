@@ -89,7 +89,7 @@ const AdminDashboard = () => {
   const [aparList, setAparList] = useState<Apar[]>([]);
   const [isAparDialogOpen, setIsAparDialogOpen] = useState(false);
   const [currentApar, setCurrentApar] = useState<Apar | null>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>(undefined); // Reverted to using selectedLocationId
+  const [manualAparLocationName, setManualAparLocationName] = useState<string>(''); // New state for manual input
   const [aparExpiredDate, setAparExpiredDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
@@ -417,14 +417,14 @@ const AdminDashboard = () => {
   // APAR Management Handlers
   const handleAddAparClick = () => {
     setCurrentApar(null);
-    setSelectedLocationId(undefined); // Reset selected location ID
+    setManualAparLocationName(''); // Clear for new APAR
     setAparExpiredDate(undefined);
     setIsAparDialogOpen(true);
   };
 
   const handleEditAparClick = (apar: Apar) => {
     setCurrentApar(apar);
-    setSelectedLocationId(apar.location_id); // Set selected location ID from existing APAR
+    setManualAparLocationName(apar.locations?.name || ''); // Pre-fill with current location name
     setAparExpiredDate(new Date(apar.expired_date));
     setIsAparDialogOpen(true);
   };
@@ -432,17 +432,56 @@ const AdminDashboard = () => {
   const handleSaveApar = async () => {
     setLoadingData(true);
     try {
-      if (!selectedLocationId || !aparExpiredDate) { // Check for selectedLocationId
-        toast.error("Lokasi APAR dan Tanggal Kedaluwarsa harus diisi.");
+      if (!manualAparLocationName || !aparExpiredDate) {
+        toast.error("Nama Lokasi APAR dan Tanggal Kedaluwarsa harus diisi.");
         return;
       }
 
       const formattedExpiredDate = format(aparExpiredDate, 'yyyy-MM-dd');
-      
+      let finalLocationId: string;
+
+      // Find if location already exists
+      const existingLocation = locationList.find(loc => loc.name.toLowerCase() === manualAparLocationName.toLowerCase());
+
+      if (existingLocation) {
+        finalLocationId = existingLocation.id;
+      } else {
+        // If location does not exist, create a new one
+        // First insert with a temporary QR code data, then update with the correct one
+        const { data: newLocData, error: newLocError } = await supabase
+          .from('locations')
+          .insert({ 
+            name: manualAparLocationName, 
+            posisi_gedung: null, // Default to null for new locations created via APAR form
+            qr_code_data: 'temp_placeholder_qr_data' // Provide a temporary non-null value
+          })
+          .select('id')
+          .single();
+
+        if (newLocError) throw newLocError;
+        if (!newLocData) throw new Error("Gagal membuat lokasi baru untuk APAR.");
+        
+        finalLocationId = newLocData.id;
+        
+        // Now generate the correct QR code data using the newly generated location ID
+        const qrCodeDataForNewLocation = `${window.location.origin}/scan-location?id=${finalLocationId}`;
+
+        // Update the newly created location with the correct QR code data
+        const { error: updateLocQrError } = await supabase
+          .from('locations')
+          .update({ qr_code_data: qrCodeDataForNewLocation })
+          .eq('id', finalLocationId);
+
+        if (updateLocQrError) throw updateLocQrError;
+
+        toast.info(`Lokasi baru "${manualAparLocationName}" dibuat secara otomatis.`);
+        await fetchLocations(); // Refresh location list after adding new one
+      }
+
       if (currentApar) {
         // Update existing APAR
         const updates = {
-          location_id: selectedLocationId,
+          location_id: finalLocationId,
           expired_date: formattedExpiredDate,
         };
         const { error } = await supabase
@@ -457,7 +496,7 @@ const AdminDashboard = () => {
         const { data, error } = await supabase
           .from('apars')
           .insert({
-            location_id: selectedLocationId, // Use selectedLocationId directly
+            location_id: finalLocationId,
             expired_date: formattedExpiredDate,
             qr_code_data: 'temp_qr_data', // Placeholder, will be updated
           })
@@ -691,9 +730,7 @@ const AdminDashboard = () => {
       <Dialog open={isPersonnelDialogOpen} onOpenChange={setIsPersonnelDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>
-              {currentPersonnel ? 'Edit Personel' : 'Tambah Personel Baru'}
-            </DialogTitle>
+            <DialogTitle>{currentPersonnel ? 'Edit Personel' : 'Tambah Personel Baru'}</DialogTitle>
             <DialogDescription>
               {currentPersonnel ? 'Ubah detail personel.' : 'Isi detail untuk personel baru.'}
             </DialogDescription>
@@ -759,9 +796,7 @@ const AdminDashboard = () => {
       <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>
-              {currentLocation ? 'Edit Lokasi' : 'Tambah Lokasi Baru'}
-            </DialogTitle>
+            <DialogTitle>{currentLocation ? 'Edit Lokasi' : 'Tambah Lokasi Baru'}</DialogTitle>
             <DialogDescription>
               {currentLocation ? 'Ubah detail lokasi.' : 'Isi detail untuk lokasi baru.'}
             </DialogDescription>
@@ -810,18 +845,13 @@ const AdminDashboard = () => {
               <Label htmlFor="aparLocation" className="text-right">
                 Lokasi APAR
               </Label>
-              <Select onValueChange={setSelectedLocationId} value={selectedLocationId}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Pilih Lokasi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locationList.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name} ({loc.posisi_gedung})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input 
+                id="aparLocation" 
+                value={manualAparLocationName} 
+                onChange={(e) => setManualAparLocationName(e.target.value)} 
+                className="col-span-3" 
+                placeholder="Contoh: Lantai 1, Area Parkir"
+              />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="aparExpiredDate" className="text-right">
