@@ -21,6 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import CheckAreaReportsTable from '@/components/CheckAreaReportsTable'; // Import CheckAreaReportsTable
 
 interface Location {
   id: string;
@@ -33,6 +34,7 @@ interface CheckAreaReport {
   location_id: string;
   created_at: string;
   user_id: string; // Ensure user_id is included for filtering reports
+  photo_url: string; // Tambahkan photo_url di sini
 }
 
 interface ScheduleEntry {
@@ -53,6 +55,7 @@ interface SatpamTab {
     isCheckedToday: boolean;
     lastCheckedAt: string | null;
   }[];
+  reportsForToday: CheckAreaReport[]; // Tambahkan ini untuk laporan per satpam
 }
 
 const SupervisorDashboard = () => {
@@ -141,9 +144,7 @@ const SupervisorDashboard = () => {
         // Fetch reports for the determined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
-          .select('location_id, user_id, created_at')
-          .gte('created_at', startOfCheckingDayUTC)
-          .lt('created_at', endOfCheckingDayUTC);
+          .select('location_id, user_id, created_at, photo_url'); // <--- MENAMBAHKAN photo_url DI SINI
 
         if (reportsError) throw reportsError;
         setReports(reportsData);
@@ -169,6 +170,7 @@ const SupervisorDashboard = () => {
         isCheckedToday: boolean;
         lastCheckedAt: string | null;
       }[];
+      reportsForToday: CheckAreaReport[]; // Inisialisasi array laporan
     }>();
 
     schedules.forEach(schedule => {
@@ -182,6 +184,7 @@ const SupervisorDashboard = () => {
           satpamName,
           assignedLocationIds: new Set(),
           locationsStatus: [],
+          reportsForToday: [], // Pastikan ini diinisialisasi
         });
       }
 
@@ -198,6 +201,31 @@ const SupervisorDashboard = () => {
       }
     });
 
+    // Filter reports for each satpam and add to their entry
+    reports.forEach(report => {
+      const satpamEntry = groupedBySatpam.get(report.user_id);
+      if (satpamEntry) {
+        // Check if the report falls within the selected date's "checking day"
+        const formattedSelectedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+        const reportDate = format(new Date(report.created_at), 'yyyy-MM-dd');
+
+        // This logic needs to match the SatpamDashboard's "checking day" logic
+        const reportDateTime = new Date(report.created_at);
+        const reportGMT7Time = new Date(reportDateTime.getTime() + (reportDateTime.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
+        let reportTargetCalendarDate = new Date(reportGMT7Time);
+        reportTargetCalendarDate.setHours(6, 0, 0, 0); 
+        if (reportGMT7Time.getHours() < 6) {
+          reportTargetCalendarDate.setDate(reportTargetCalendarDate.getDate() - 1);
+        }
+        const formattedReportTargetDate = format(reportTargetCalendarDate, 'yyyy-MM-dd');
+
+        if (formattedReportTargetDate === formattedSelectedDate) {
+          satpamEntry.reportsForToday.push(report);
+        }
+      }
+    });
+
+
     const result: SatpamTab[] = [];
     groupedBySatpam.forEach(entry => {
       // Calculate locationDisplay here
@@ -208,17 +236,17 @@ const SupervisorDashboard = () => {
 
       const assignedToGedungBarat = Array.from(entry.assignedLocationIds).every(locId => 
         gedungBaratLocations.some(gbLoc => gbLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungBaratLocations.length;
+      ) && entry.assignedLocationIds.size === gedungBaratLocations.length && gedungBaratLocations.length > 0;
 
       const assignedToGedungTimur = Array.from(entry.assignedLocationIds).every(locId => 
         gedungTimurLocations.some(gtLoc => gtLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungTimurLocations.length;
+      ) && entry.assignedLocationIds.size === gedungTimurLocations.length && gedungTimurLocations.length > 0;
 
       if (entry.assignedLocationIds.size === allLocationsCount && allLocationsCount > 0) {
         locationDisplay = "Semua Gedung";
-      } else if (assignedToGedungBarat && !assignedToGedungTimur && gedungBaratLocations.length > 0) {
+      } else if (assignedToGedungBarat) {
         locationDisplay = "Gedung Barat";
-      } else if (assignedToGedungTimur && !assignedToGedungBarat && gedungTimurLocations.length > 0) {
+      } else if (assignedToGedungTimur) {
         locationDisplay = "Gedung Timur";
       } else if (entry.assignedLocationIds.size > 0) {
         locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
@@ -231,11 +259,12 @@ const SupervisorDashboard = () => {
         satpamName: entry.satpamName,
         locationDisplay: locationDisplay,
         locationsStatus: entry.locationsStatus.sort((a, b) => a.location.name.localeCompare(b.location.name)),
+        reportsForToday: entry.reportsForToday.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), // Sort reports by time
       });
     });
 
     return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
-  }, [schedules, reports, locationList]);
+  }, [schedules, reports, locationList, selectedDate]);
 
   if (sessionLoading || loadingData) {
     return (
@@ -333,6 +362,8 @@ const SupervisorDashboard = () => {
                       </Table>
                     </div>
                   )}
+                  {/* Menambahkan komponen CheckAreaReportsTable di sini */}
+                  <CheckAreaReportsTable reports={satpamTab.reportsForToday} />
                 </TabsContent>
               ))}
             </Tabs>
