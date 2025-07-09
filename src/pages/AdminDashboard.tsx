@@ -447,15 +447,33 @@ const AdminDashboard = () => {
         finalLocationId = existingLocation.id;
       } else {
         // If location does not exist, create a new one
+        // First insert with a temporary QR code data, then update with the correct one
         const { data: newLocData, error: newLocError } = await supabase
           .from('locations')
-          .insert({ name: manualAparLocationName, posisi_gedung: null }) // Default to null for new manual locations
+          .insert({ 
+            name: manualAparLocationName, 
+            posisi_gedung: null,
+            qr_code_data: 'temp_placeholder_qr_data' // Provide a temporary non-null value
+          })
           .select('id')
           .single();
 
         if (newLocError) throw newLocError;
         if (!newLocData) throw new Error("Gagal membuat lokasi baru untuk APAR.");
+        
         finalLocationId = newLocData.id;
+        
+        // Now generate the correct QR code data using the newly generated location ID
+        const qrCodeDataForNewLocation = `${window.location.origin}/scan-location?id=${finalLocationId}`;
+
+        // Update the newly created location with the correct QR code data
+        const { error: updateLocQrError } = await supabase
+          .from('locations')
+          .update({ qr_code_data: qrCodeDataForNewLocation })
+          .eq('id', finalLocationId);
+
+        if (updateLocQrError) throw updateLocQrError;
+
         toast.info(`Lokasi baru "${manualAparLocationName}" dibuat secara otomatis.`);
         await fetchLocations(); // Refresh location list after adding new one
       }
