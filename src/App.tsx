@@ -1,47 +1,43 @@
-import { Toaster } from "@/components/ui/sonner";
-import Layout from "./components/Layout"; // Mengubah dari named import menjadi default import
-import { SessionProvider } from "./integrations/supabase/SessionContext";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import CheckAreaReport from "./pages/CheckAreaReport";
-import Schedules from "./pages/Schedules";
-import Admin from "./pages/Admin";
-import PrivateRoute from "./components/PrivateRoute";
-import NotFound from "./pages/NotFound";
-import SatpamDashboard from "./pages/SatpamDashboard";
-import SupervisorDashboard from "./pages/SupervisorDashboard";
-import PrintQRCode from "./pages/PrintQRCode";
-import ScanLocation from "./pages/ScanLocation";
-
-const queryClient = new QueryClient();
+import { Routes, Route, BrowserRouter } from 'react-router-dom';
+import Index from './pages/Index';
+import NotFound from './pages/NotFound';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import SupervisorDashboard from './pages/SupervisorDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import Profile from './pages/Profile';
+import Schedule from './pages/Schedule';
+import Locations from './pages/Locations';
+import CheckArea from './pages/CheckArea';
+import CheckAreaReports from './pages/CheckAreaReports';
+import { SessionProvider } from './integrations/supabase/SessionContext';
+import { Toaster } from 'sonner';
+import Layout from './components/Layout'; // Import Layout component
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <BrowserRouter>
-          <Toaster />
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-              <Route path="/satpam-dashboard" element={<PrivateRoute roles={['satpam']}><SatpamDashboard /></PrivateRoute>} />
-              <Route path="/supervisor-dashboard" element={<PrivateRoute roles={['atasan']}><SupervisorDashboard /></PrivateRoute>} />
-              <Route path="/check-area-report" element={<PrivateRoute roles={['satpam']}><CheckAreaReport /></PrivateRoute>} />
-              <Route path="/schedules" element={<PrivateRoute><Schedules /></PrivateRoute>} />
-              <Route path="/admin" element={<PrivateRoute roles={['admin']}><Admin /></PrivateRoute>} />
-              <Route path="/print-qr/:id" element={<PrivateRoute roles={['admin']}><PrintQRCode /></PrivateRoute>} />
-              <Route path="/scan-location" element={<PrivateRoute roles={['satpam']}><ScanLocation /></PrivateRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
-        </BrowserRouter>
-      </SessionProvider>
-    </QueryClientProvider>
+    <SessionProvider>
+      <Toaster />
+      <BrowserRouter>
+        <Layout> {/* Wrap routes with Layout */}
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/supervisor-dashboard" element={<SupervisorDashboard />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/schedule" element={<Schedule />} />
+            <Route path="/locations" element={<Locations />} />
+            <Route path="/check-area" element={<CheckArea />} />
+            <Route path="/check-area-reports" element={<CheckAreaReports />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </SessionProvider>
   );
 }
 
