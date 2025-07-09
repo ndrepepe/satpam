@@ -1,6 +1,5 @@
 import React from 'react';
 import Navbar from './Navbar';
-import { MadeWithDyad } from './made-with-dyad';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,7 +12,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="flex-grow">
         {children}
       </main>
-      <MadeWithDyad />
     </div>
   );
 };

@@ -41,7 +41,7 @@ interface SatpamProfile {
 interface Location {
   id: string;
   name: string;
-  posisi_gedung?: string | null; // Tambahkan field baru
+  posisi_gedung?: string | null;
 }
 
 interface ScheduleEntry {
@@ -50,7 +50,7 @@ interface ScheduleEntry {
   user_id: string;
   location_id: string;
   profiles: { first_name: string; last_name: string; id_number?: string } | null;
-  locations: { name: string; posisi_gedung?: string | null } | null; // Tambahkan posisi_gedung
+  locations: { name: string; posisi_gedung?: string | null } | null;
 }
 
 interface DailyScheduleSummaryEntry {
@@ -58,8 +58,8 @@ interface DailyScheduleSummaryEntry {
   schedule_date: string;
   profileName: string;
   idNumber?: string;
-  locationDisplay: string; // e.g., "Semua Lokasi", "Gedung Barat", "Beberapa Lokasi"
-  assignedLocationIds: Set<string>; // To determine the type of assignment
+  locationDisplay: string;
+  assignedLocationIds: Set<string>;
 }
 
 interface SummarizedRangeScheduleEntry {
@@ -83,9 +83,9 @@ const SatpamSchedule: React.FC = () => {
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [originalUserId, setOriginalUserId] = useState<string | null>(null);
   const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
-  const [originalLocationAssignmentType, setOriginalLocationAssignmentType] = useState<string | undefined>(undefined); // New state
+  const [originalLocationAssignmentType, setOriginalLocationAssignmentType] = useState<string | undefined>(undefined);
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
-  const [newSelectedBuildingPosition, setNewSelectedBuildingPosition] = useState<string | undefined>(undefined); // New state for dialog
+  const [newSelectedBuildingPosition, setNewSelectedBuildingPosition] = useState<string | undefined>(undefined);
 
   // New states for date range filtering
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
@@ -121,14 +121,14 @@ const SatpamSchedule: React.FC = () => {
         .eq('role', 'satpam');
 
       if (satpamError) throw satpamError;
-      setSatpamList(satpamData);
+      setSatpamList(satpamData as SatpamProfile[]);
 
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
-        .select('id, name, posisi_gedung'); // Fetch posisi_gedung
+        .select('id, name, posisi_gedung');
 
       if (locationError) throw locationError;
-      setLocationList(locationData);
+      setLocationList(locationData as Location[]);
 
     } catch (error: any) {
       toast.error(`Gagal memuat data awal: ${error.message}`);
@@ -151,12 +151,12 @@ const SatpamSchedule: React.FC = () => {
           location_id,
           profiles (first_name, last_name, id_number),
           locations (name, posisi_gedung)
-        `) // Select posisi_gedung
+        `)
         .eq('schedule_date', formattedDate)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setSchedules(data);
+      setSchedules(data as unknown as ScheduleEntry[]);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal: ${error.message}`);
       console.error("Error fetching schedules:", error);
@@ -189,15 +189,16 @@ const SatpamSchedule: React.FC = () => {
           location_id,
           profiles (first_name, last_name, id_number),
           locations (name, posisi_gedung)
-        `) // Select posisi_gedung
+        `)
         .gte('schedule_date', formattedStartDate)
         .lte('schedule_date', formattedEndDate)
         .order('schedule_date', { ascending: true }); 
 
       if (error) throw error;
       
+      const typedData = data as unknown as ScheduleEntry[];
       // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
-      const sortedData = data.sort((a, b) => {
+      const sortedData = typedData.sort((a, b) => {
         const nameA = a.profiles?.first_name || '';
         const nameB = b.profiles?.first_name || '';
         return nameA.localeCompare(nameB);
@@ -232,7 +233,7 @@ const SatpamSchedule: React.FC = () => {
       profileName: string;
       idNumber?: string;
       assignedLocationIds: Set<string>;
-      assignedBuildingPositions: Set<string>; // New: to track assigned buildings
+      assignedBuildingPositions: Set<string>;
     }>();
 
     schedules.forEach(schedule => {
@@ -257,7 +258,6 @@ const SatpamSchedule: React.FC = () => {
     const result: DailyScheduleSummaryEntry[] = [];
     grouped.forEach(entry => {
       let locationDisplay: string;
-      // Determine the assignment type based on assigned locations
       const allLocationsCount = locationList.length;
       const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
       const gedungTimurLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur');
@@ -453,9 +453,9 @@ const SatpamSchedule: React.FC = () => {
   const handleEditScheduleAssignmentClick = (scheduleSummary: DailyScheduleSummaryEntry) => {
     setOriginalUserId(scheduleSummary.user_id);
     setOriginalScheduleDate(scheduleSummary.schedule_date);
-    setOriginalLocationAssignmentType(scheduleSummary.locationDisplay); // Store original assignment type
-    setNewSelectedSatpamId(scheduleSummary.user_id); // Pre-select current satpam in dropdown
-    setNewSelectedBuildingPosition(scheduleSummary.locationDisplay === "Beberapa Lokasi" ? "Semua Gedung" : scheduleSummary.locationDisplay); // Pre-select current building position, default to 'Semua Gedung' if mixed
+    setOriginalLocationAssignmentType(scheduleSummary.locationDisplay);
+    setNewSelectedSatpamId(scheduleSummary.user_id);
+    setNewSelectedBuildingPosition(scheduleSummary.locationDisplay === "Beberapa Lokasi" ? "Semua Gedung" : scheduleSummary.locationDisplay);
     setIsReassignDialogOpen(true);
   };
 
@@ -546,7 +546,7 @@ const SatpamSchedule: React.FC = () => {
       setNewSelectedBuildingPosition(undefined);
       
       if (selectedDate) {
-        await fetchSchedules(selectedDate); // Re-fetch schedules to update the table
+        await fetchSchedules(selectedDate);
       }
       if (startDate && endDate) {
         fetchRangeSchedules();
@@ -573,7 +573,7 @@ const SatpamSchedule: React.FC = () => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = XLSX.Sheets[sheetName];
+        const worksheet = workbook.Sheets[sheetName]; // Corrected: Access Sheets from workbook
         
         // Read data as array of arrays to get headers and rows
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
@@ -653,7 +653,7 @@ const SatpamSchedule: React.FC = () => {
               schedulesToProcess.push({ date: dateCol.header, userId: userId, buildingPosition: buildingPosition });
             }
           }
-          if (hasError) break; // Stop processing rows if an error occurred
+          if (hasError) break;
         }
 
         if (hasError) {
@@ -683,7 +683,7 @@ const SatpamSchedule: React.FC = () => {
 
         toast.success("Jadwal berhasil diimpor dari file XLSX!");
         if (selectedDate) {
-          fetchSchedules(selectedDate); // Refresh current view
+          fetchSchedules(selectedDate);
         }
         // Also refresh range schedules if they are currently displayed
         if (startDate && endDate) {
@@ -723,9 +723,9 @@ const SatpamSchedule: React.FC = () => {
       ];
       // Example assignments for dates
       for (let i = 0; i < 30; i++) { 
-        if (i === 0) row1.push('Gedung Barat'); // Assign to Gedung Barat on day 0
-        else if (i === 2) row1.push('Semua Gedung'); // Assign to Semua Gedung on day 2
-        else row1.push(null); // No assignment
+        if (i === 0) row1.push('Gedung Barat');
+        else if (i === 2) row1.push('Semua Gedung');
+        else row1.push(null);
       }
       ws_data.push(row1);
 
@@ -736,9 +736,9 @@ const SatpamSchedule: React.FC = () => {
           exampleSatpam2.id_number || 'ID002',
         ];
         for (let i = 0; i < 30; i++) { 
-          if (i === 1) row2.push('Gedung Timur'); // Assign to Gedung Timur on day 1
-          else if (i === 3) row2.push('Semua Gedung'); // Assign to Semua Gedung on day 3
-          else row2.push(null); // No assignment
+          if (i === 1) row2.push('Gedung Timur');
+          else if (i === 3) row2.push('Semua Gedung');
+          else row2.push(null);
         }
         ws_data.push(row2);
       }

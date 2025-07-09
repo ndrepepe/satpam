@@ -41,8 +41,9 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string; id_number?: string } | null;
-  locations: { name: string; posisi_gedung?: string | null } | null;
+  // Mengubah tipe profiles dan locations menjadi array objek atau null
+  profiles: { first_name: string; last_name: string; id_number?: string }[] | null;
+  locations: { name: string; posisi_gedung?: string | null }[] | null;
 }
 
 interface SatpamTab {
@@ -53,7 +54,7 @@ interface SatpamTab {
     location: Location;
     isCheckedToday: boolean;
     lastCheckedAt: string | null;
-    photoUrl: string | null; // Menambahkan photoUrl di sini
+    photoUrl: string | null;
   }[];
 }
 
@@ -107,12 +108,12 @@ const SupervisorDashboard = () => {
           .from('locations')
           .select('id, name, qr_code_data, posisi_gedung');
         if (locError) throw locError;
-        setLocationList(locData);
+        setLocationList(locData as Location[]);
 
         const formattedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
         // Fetch schedules for the selected date
-        const { data: scheduleData, error: scheduleError } = await supabase
+        const { data, error: scheduleError } = await supabase
           .from('schedules')
           .select(`
             id,
@@ -121,11 +122,12 @@ const SupervisorDashboard = () => {
             location_id,
             profiles (first_name, last_name, id_number),
             locations (name, posisi_gedung)
-          `)
-          .eq('schedule_date', formattedDate);
+          `);
+        // Filter by date after select to ensure correct type inference for nested objects
+        const scheduleData = data?.filter(s => s.schedule_date === formattedDate);
 
         if (scheduleError) throw scheduleError;
-        setSchedules(scheduleData);
+        setSchedules(scheduleData as unknown as ScheduleEntry[]); // Cast to unknown first
 
         // Calculate the "checking day" based on 06:00 AM GMT+7 for reports
         const now = new Date();
@@ -144,11 +146,11 @@ const SupervisorDashboard = () => {
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, user_id, created_at, photo_url')
-          .gte('created_at', startOfCheckingDayUTC) // Filter by date range
-          .lt('created_at', endOfCheckingDayUTC); // Filter by date range
+          .gte('created_at', startOfCheckingDayUTC)
+          .lt('created_at', endOfCheckingDayUTC);
 
         if (reportsError) throw reportsError;
-        setReports(reportsData);
+        setReports(reportsData as CheckAreaReport[]);
 
       } catch (error: any) {
         toast.error(`Gagal memuat data: ${error.message}`);
@@ -170,13 +172,14 @@ const SupervisorDashboard = () => {
         location: Location;
         isCheckedToday: boolean;
         lastCheckedAt: string | null;
-        photoUrl: string | null; // Menambahkan photoUrl di sini
+        photoUrl: string | null;
       }[];
     }>();
 
     schedules.forEach(schedule => {
       const satpamId = schedule.user_id;
-      const satpamName = schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A';
+      // Akses elemen pertama dari array profiles
+      const satpamName = schedule.profiles?.[0] ? `${schedule.profiles[0].first_name} ${schedule.profiles[0].last_name}` : 'N/A';
       const location = locationList.find(loc => loc.id === schedule.location_id);
 
       if (!groupedBySatpam.has(satpamId)) {
@@ -199,7 +202,7 @@ const SupervisorDashboard = () => {
           location: location,
           isCheckedToday: !!report,
           lastCheckedAt: report ? format(new Date(report.created_at), 'HH:mm', { locale: idLocale }) : null,
-          photoUrl: report?.photo_url || null, // Ambil photo_url dari laporan
+          photoUrl: report?.photo_url || null,
         });
       }
     });
@@ -226,9 +229,9 @@ const SupervisorDashboard = () => {
       } else if (assignedToGedungTimur) {
         locationDisplay = "Gedung Timur";
       } else if (entry.assignedLocationIds.size > 0) {
-        locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
+        locationDisplay = "Beberapa Lokasi";
       } else {
-        locationDisplay = "Tidak Ditugaskan"; // No locations assigned for this satpam on this date
+        locationDisplay = "Tidak Ditugaskan";
       }
 
       result.push({
@@ -276,12 +279,12 @@ const SupervisorDashboard = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  initialFocus
-                />
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                  />
               </PopoverContent>
             </Popover>
           </div>
@@ -317,7 +320,7 @@ const SupervisorDashboard = () => {
                             <TableHead className="text-center">Posisi Gedung</TableHead>
                             <TableHead className="text-center">Status Cek</TableHead>
                             <TableHead className="text-center">Terakhir Dicek</TableHead>
-                            <TableHead className="text-center">Foto</TableHead> {/* Kolom Foto baru */}
+                            <TableHead className="text-center">Foto</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
