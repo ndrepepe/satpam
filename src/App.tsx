@@ -6,8 +6,9 @@ import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
-import Admin from './pages/Admin'; // Mengubah import dari AdminDashboard menjadi Admin
+import Admin from './pages/Admin';
 import { Toaster } from 'sonner';
+import Layout from './components/Layout'; // Import komponen Layout
 
 function App() {
   return (
@@ -15,33 +16,36 @@ function App() {
       <Toaster />
       <Router>
         <Routes>
-          <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/supervisor-dashboard"
-            element={
-              <PrivateRoute>
-                <SupervisorDashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/admin-dashboard" // Rute tetap sama, hanya komponen yang diubah
-            element={
-              <PrivateRoute>
-                <Admin /> {/* Mengubah komponen yang dirender dari AdminDashboard menjadi Admin */}
-              </PrivateRoute>
-            }
-          />
           <Route path="*" element={<NotFound />} />
+          {/* Rute yang memerlukan Layout (termasuk Navbar) */}
+          <Route element={<Layout />}>
+            <Route path="/" element={<Index />} />
+            <Route
+              path="/dashboard"
+              element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/supervisor-dashboard"
+              element={
+                <PrivateRoute>
+                  <SupervisorDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin-dashboard"
+              element={
+                <PrivateRoute>
+                  <Admin />
+                </PrivateRoute>
+              }
+            />
+          </Route>
         </Routes>
       </Router>
     </SessionProvider>

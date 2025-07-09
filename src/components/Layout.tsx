@@ -1,6 +1,6 @@
 import React from 'react';
 import Navbar from './Navbar';
-import { MadeWithDyad } from './made-with-dyad';
+// import { MadeWithDyad } from './made-with-dyad'; // Dihapus
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,7 +13,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="flex-grow">
         {children}
       </main>
-      <MadeWithDyad />
+      {/* <MadeWithDyad /> Dihapus */}
     </div>
   );
 };
