@@ -132,13 +132,21 @@ const AdminDashboard = () => {
   const fetchPersonnel = async () => {
     setLoadingData(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, id_number, email, role')
-        .order('created_at', { ascending: false });
+      // Invoke Edge Function to list users with profiles
+      const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
 
-      if (error) throw error;
-      setPersonnelList(data as Profile[]);
+      if (error) {
+        console.error("Error invoking list-users-with-profiles Edge Function:", error);
+        throw new Error(`Edge Function error: ${error.message}`);
+      }
+
+      if (data && data.personnel) {
+        setPersonnelList(data.personnel);
+      } else if (data && data.error) {
+        throw new Error(`Edge Function returned error: ${data.error}`);
+      } else {
+        throw new Error("Unexpected response from list-users-with-profiles Edge Function.");
+      }
     } catch (error: any) {
       toast.error(`Gagal memuat daftar personel: ${error.message}`);
       console.error("Error fetching personnel:", error);
@@ -525,7 +533,7 @@ const AdminDashboard = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-4"> {/* Ubah grid-cols-6 menjadi grid-cols-4 */}
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="personnel">Kelola Personel</TabsTrigger>
               <TabsTrigger value="locations">Kelola Lokasi</TabsTrigger>
               <TabsTrigger value="apar-management">Kelola APAR</TabsTrigger>
