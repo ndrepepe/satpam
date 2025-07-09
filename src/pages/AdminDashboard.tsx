@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import SatpamSchedule from '@/components/SatpamSchedule'; // Import SatpamSchedule component
 
 interface Profile {
   id: string;
@@ -529,6 +530,7 @@ const AdminDashboard = () => {
               <TabsTrigger value="locations">Kelola Lokasi</TabsTrigger>
               <TabsTrigger value="apar-check">Cek APAR</TabsTrigger>
               <TabsTrigger value="apar-management">Kelola APAR</TabsTrigger> {/* Menu baru */}
+              <TabsTrigger value="satpam-schedule">Penjadwalan Satpam</TabsTrigger> {/* Menu Penjadwalan Satpam */}
             </TabsList>
 
             {/* Tab Content for Personnel Management */}
@@ -675,6 +677,12 @@ const AdminDashboard = () => {
                   </TableBody>
                 </Table>
               </div>
+            </TabsContent>
+
+            {/* Tab Content for Satpam Schedule */}
+            <TabsContent value="satpam-schedule" className="mt-4">
+              <h3 className="text-xl font-semibold mb-4">Penjadwalan Satpam</h3>
+              <SatpamSchedule /> {/* Render the SatpamSchedule component here */}
             </TabsContent>
           </Tabs>
         </CardContent>
