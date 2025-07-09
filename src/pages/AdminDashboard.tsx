@@ -519,18 +519,17 @@ const AdminDashboard = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <Card className="max-w-5xl mx-auto mt-8"> {/* Lebarkan Card untuk menampung 5 tab */}
+      <Card className="max-w-5xl mx-auto mt-8">
         <CardHeader>
           <CardTitle className="text-center">Dashboard Admin</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-5"> {/* Ubah grid-cols-4 menjadi grid-cols-5 */}
+            <TabsList className="grid w-full grid-cols-4"> {/* Ubah grid-cols-6 menjadi grid-cols-4 */}
               <TabsTrigger value="personnel">Kelola Personel</TabsTrigger>
               <TabsTrigger value="locations">Kelola Lokasi</TabsTrigger>
-              <TabsTrigger value="apar-check">Cek APAR</TabsTrigger>
-              <TabsTrigger value="apar-management">Kelola APAR</TabsTrigger> {/* Menu baru */}
-              <TabsTrigger value="satpam-schedule">Penjadwalan Satpam</TabsTrigger> {/* Menu Penjadwalan Satpam */}
+              <TabsTrigger value="apar-management">Kelola APAR</TabsTrigger>
+              <TabsTrigger value="satpam-schedule">Penjadwalan Satpam</TabsTrigger>
             </TabsList>
 
             {/* Tab Content for Personnel Management */}
@@ -618,15 +617,6 @@ const AdminDashboard = () => {
                   </TableBody>
                 </Table>
               </div>
-            </TabsContent>
-
-            {/* Tab Content for APAR Check */}
-            <TabsContent value="apar-check" className="mt-4">
-              <h3 className="text-xl font-semibold mb-4">Manajemen Cek APAR</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Fitur untuk mengelola dan melihat laporan cek APAR akan segera hadir di sini.
-              </p>
-              {/* Anda bisa menambahkan komponen atau tabel di sini nanti */}
             </TabsContent>
 
             {/* Tab Content for APAR Management */}
