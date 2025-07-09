@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
-import AdminDashboard from './pages/AdminDashboard';
+import AdminDashboard from './pages/AdminDashboard'; // Diperbarui
 import Profile from './pages/Profile';
 import Schedule from './pages/Schedule';
 import Locations from './pages/Locations';

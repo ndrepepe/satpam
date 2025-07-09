@@ -40,7 +40,7 @@ const Index = () => {
       }
 
       if (profileData?.role === 'admin') {
-        navigate('/admin');
+        navigate('/admin-dashboard'); // Diperbarui
       } else if (profileData?.role === 'satpam' || profileData?.role === 'atasan') {
         navigate('/dashboard'); // Dashboard handles further redirection for satpam/atasan
       } else {
