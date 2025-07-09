@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { SessionProvider, useSession } from './integrations/supabase/SessionContext';
 import Index from './pages/Index';
 import Login from './pages/Login';
-import Private from './pages/Private';
 import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
@@ -18,14 +17,15 @@ function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
-          <Route
+          {/* Menghapus rute /private karena file Private.tsx tidak ada */}
+          {/* <Route
             path="/private"
             element={
               <PrivateRoute>
                 <Private />
               </PrivateRoute>
             }
-          />
+          /> */}
           <Route
             path="/dashboard"
             element={
