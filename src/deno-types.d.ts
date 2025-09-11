@@ -1,0 +1,1 @@
+/// <reference types="https://deno.land/x/deno@v1.36.1/types/lib.deno.ns.d.ts" />
