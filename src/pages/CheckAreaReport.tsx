@@ -59,7 +59,6 @@ const CheckAreaReport = () => {
       const file = event.target.files[0];
       setPhotoFile(file);
       setPhotoPreviewUrl(URL.createObjectURL(file));
-      console.log("Photo selected:", file.name, "Size:", file.size);
     }
   };
 
@@ -68,76 +67,63 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
-    console.log("handleSubmitReport called.");
-    console.log("Current state - user:", !!user, "locationId:", locationId, "photoFile:", !!photoFile, "locationName:", locationName);
-
     if (!user || !locationId || !photoFile || !locationName) {
       toast.error("Data laporan tidak lengkap. Pastikan Anda sudah mengambil foto dan lokasi terdeteksi.");
-      console.error("Missing data for report submission:", { user: !!user, locationId, photoFile: !!photoFile, locationName });
       return;
     }
 
     setLoading(true);
-    let photoPublicUrl: string | null = null;
 
     try {
-      // 1. Upload photo to Cloudflare R2 via Edge Function
-      const fileExtension = photoFile.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExtension}`;
-      const filePath = `${user.id}/${fileName}`;
+      // Baca file sebagai ArrayBuffer
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(photoFile);
+      });
 
-      console.log("Attempting to upload to R2 via Edge Function:", filePath);
-      
-      // Read file as ArrayBuffer
-      const arrayBuffer = await photoFile.arrayBuffer();
-      
-      // Call Edge Function to upload to R2
-      const { data: uploadData, error: uploadError } = await supabase.functions.invoke('upload-to-r2', {
+      // Konversi ke array number untuk JSON
+      const photoData = Array.from(new Uint8Array(arrayBuffer));
+
+      // Panggil Edge Function
+      const { data, error } = await supabase.functions.invoke('upload-to-r2', {
         body: {
           userId: user.id,
           locationName: locationName,
-          photoData: arrayBuffer,
-          photoId: fileName,
+          photoData: photoData,
           contentType: photoFile.type
         },
       });
 
-      if (uploadError) {
-        console.error("Error invoking upload-to-r2 Edge Function:", uploadError);
-        throw uploadError;
+      if (error) {
+        throw error;
       }
 
-      if (!uploadData?.r2PublicUrl) {
+      if (!data?.r2PublicUrl) {
         throw new Error("Gagal mendapatkan URL publik foto dari R2.");
       }
-      
-      photoPublicUrl = uploadData.r2PublicUrl;
-      console.log("R2 Public URL to be saved in DB:", photoPublicUrl);
 
-      // 2. Save report to database with R2 URL
-      console.log("Attempting to insert report into database with R2 URL:", photoPublicUrl);
+      // Simpan report ke database
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: photoPublicUrl,
+          photo_url: data.r2PublicUrl,
         });
 
       if (insertError) {
-        console.error("Error inserting report into database:", insertError);
         throw insertError;
       }
-      console.log("Report successfully inserted into database.");
 
       toast.success("Laporan cek area berhasil dikirim dan foto disimpan di R2 Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
-      console.error("Error submitting report (catch block):", error);
+      console.error("Error submitting report:", error);
     } finally {
       setLoading(false);
-      console.log("Loading set to false.");
     }
   };
 
