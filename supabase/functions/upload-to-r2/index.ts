@@ -30,7 +30,9 @@ serve(async (req) => {
     const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
-    const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; // R2 sering menggunakan 'auto' atau placeholder
+    // R2_REGION tidak digunakan secara langsung oleh R2, tetapi diperlukan oleh klien S3
+    // Menggunakan 'us-east-1' sebagai placeholder untuk menghindari fallback ke endpoint AWS yang salah.
+    const R2_REGION = 'us-east-1'; 
 
     if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET || !R2_BUCKET_NAME) {
       throw new Error('R2 credentials (CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) not configured. Please set them in Supabase Edge Functions secrets.');
@@ -42,16 +44,17 @@ serve(async (req) => {
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
     // Inisialisasi S3Bucket client dengan konfigurasi R2
-    const bucket = new S3Bucket({ // Menggunakan S3Bucket
+    const bucket = new S3Bucket({
       accessKeyId: R2_ACCESS_KEY,
       secretKey: R2_SECRET,
-      region: R2_REGION,
+      region: R2_REGION, // Menggunakan region placeholder
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      bucket: R2_BUCKET_NAME, // Nama bucket harus disertakan di sini
+      bucket: R2_BUCKET_NAME,
+      forcePathStyle: true, // Memaksa penggunaan path-style URL
     });
 
     // Unggah objek ke R2
-    await bucket.putObject(filename, bytes, { // Memanggil putObject pada instance bucket
+    await bucket.putObject(filename, bytes, {
       contentType: contentType,
     });
 
