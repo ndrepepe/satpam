@@ -232,7 +232,7 @@ const CheckAreaReport = () => {
             <input
               type="file"
               accept="image/*"
-              capture="environment" // Diubah dari "user" menjadi "environment"
+              capture="user" // Diubah kembali menjadi "user"
               onChange={handlePhotoChange}
               ref={fileInputRef}
               className="hidden"
