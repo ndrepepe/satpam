@@ -146,33 +146,30 @@ const CheckAreaReport = () => {
     setLoading(true);
 
     try {
-      // Baca file sebagai ArrayBuffer
-      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as ArrayBuffer);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(photoFile);
-      });
+      // Generate a unique file path within the Supabase Storage bucket
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileExt = photoFile.type.split('/')[1] || 'jpeg'; // Ensure it's jpeg as we convert to it
+      const filePath = `${user.id}/${locationId}-${timestamp}.${fileExt}`; // Path in Supabase Storage
 
-      // Konversi ke array number untuk JSON
-      const photoData = Array.from(new Uint8Array(arrayBuffer));
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('selfie-reports') // Menggunakan nama bucket baru
+        .upload(filePath, photoFile, {
+          contentType: photoFile.type,
+          upsert: false, // Jangan menimpa file yang sudah ada
+        });
 
-      // Panggil Edge Function
-      const { data, error } = await supabase.functions.invoke('upload-to-r2', {
-        body: {
-          userId: user.id,
-          locationName: locationName,
-          photoData: photoData,
-          contentType: photoFile.type // Gunakan tipe konten dari file yang sudah dioptimalkan (image/jpeg)
-        },
-      });
-
-      if (error) {
-        throw error;
+      if (uploadError) {
+        throw uploadError;
       }
 
-      if (!data?.r2PublicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto dari R2.");
+      // Dapatkan URL publik dari file yang diunggah
+      const { data: publicUrlData } = supabase.storage
+        .from('selfie-reports')
+        .getPublicUrl(filePath);
+
+      if (!publicUrlData?.publicUrl) {
+        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
       }
 
       // Simpan report ke database
@@ -181,14 +178,14 @@ const CheckAreaReport = () => {
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: data.r2PublicUrl,
+          photo_url: publicUrlData.publicUrl,
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di R2 Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Supabase Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
@@ -232,7 +229,7 @@ const CheckAreaReport = () => {
             <input
               type="file"
               accept="image/*"
-              capture="user" // Diubah kembali menjadi "user"
+              capture="user"
               onChange={handlePhotoChange}
               ref={fileInputRef}
               className="hidden"
