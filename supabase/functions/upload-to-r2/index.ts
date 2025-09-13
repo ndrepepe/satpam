@@ -44,7 +44,7 @@ async function getSignedHeaders(
   region: string,
   service: string,
   method: string,
-  path: string,
+  path: string, // Path ini seharusnya hanya path objek, bukan termasuk nama bucket
   headers: Headers,
   payload: Uint8Array
 ): Promise<Headers> {
@@ -76,7 +76,7 @@ async function getSignedHeaders(
 
   const canonicalRequest = [
     method,
-    path,
+    path, // Menggunakan path objek yang sudah benar
     '', // Query string, which is empty
     canonicalHeaders,
     '', // Empty line after canonical headers
@@ -134,14 +134,14 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
-    const objectPath = `/${filename}`;
+    const objectPath = `/${filename}`; // Path objek yang benar
 
     const url = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}${objectPath}`;
 
     const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', contentType);
     requestHeaders.set('Host', `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
-    requestHeaders.set('x-amz-acl', 'public-read'); // Menambahkan header ini
+    requestHeaders.set('x-amz-acl', 'public-read');
 
     const signedHeaders = await getSignedHeaders(
       R2_ACCESS_KEY,
@@ -149,7 +149,7 @@ serve(async (req) => {
       R2_REGION,
       's3',
       'PUT',
-      `/${R2_BUCKET_NAME}${objectPath}`,
+      objectPath, // Menggunakan objectPath yang sudah benar di sini
       requestHeaders,
       bytes
     );
