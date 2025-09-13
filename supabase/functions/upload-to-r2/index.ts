@@ -32,13 +32,6 @@ serve(async (req) => {
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
     const R2_REGION = 'us-east-1'; // Menggunakan region placeholder
 
-    // --- Logging sementara untuk debugging ---
-    console.log("R2_ACCOUNT_ID:", R2_ACCOUNT_ID ? "SET" : "UNDEFINED");
-    console.log("R2_ACCESS_KEY_ID:", R2_ACCESS_KEY ? "SET" : "UNDEFINED");
-    console.log("R2_SECRET_ACCESS_KEY:", R2_SECRET ? "SET" : "UNDEFINED");
-    console.log("R2_BUCKET_NAME:", R2_BUCKET_NAME ? "SET" : "UNDEFINED");
-    // --- Akhir logging sementara ---
-
     // Pemeriksaan yang lebih spesifik untuk setiap secret
     if (!R2_ACCOUNT_ID) {
       throw new Error('Missing CLOUDFLARE_ACCOUNT_ID secret. Please set it in Supabase Edge Functions secrets.');
