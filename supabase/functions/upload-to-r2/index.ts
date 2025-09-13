@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 // @ts-ignore
-import { S3Bucket } from "https://deno.land/x/s3@0.5.0/mod.ts"; // Menggunakan S3Bucket yang benar
+import { S3Bucket } from "https://deno.land/x/s3@0.5.0/mod.ts";
 
 // Deklarasikan Deno global untuk memenuhi kompiler TypeScript sisi klien
 declare const Deno: {
@@ -26,24 +26,22 @@ serve(async (req) => {
       throw new Error('Missing required fields');
     }
 
-    const R2_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
-    const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
-    const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
-    const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
-    const R2_REGION = 'us-east-1'; // Menggunakan region placeholder
+    // Menggunakan variabel lingkungan yang sama, tetapi nilainya akan dari Filebase
+    const FILEBASE_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID'); // Akan diisi dengan KEY dari Filebase
+    const FILEBASE_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY'); // Akan diisi dengan SECRET dari Filebase
+    const FILEBASE_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME'); // Akan diisi dengan nama bucket dari Filebase
+    const FILEBASE_ENDPOINT = 'https://s3.filebase.com'; // Endpoint S3 Filebase
+    const FILEBASE_REGION = 'us-east-1'; // Region umum, seringkali tidak terlalu penting untuk Filebase
 
-    // Pemeriksaan yang lebih spesifik untuk setiap secret
-    if (!R2_ACCOUNT_ID) {
-      throw new Error('Missing CLOUDFLARE_ACCOUNT_ID secret. Please set it in Supabase Edge Functions secrets.');
+    // Pemeriksaan untuk secrets Filebase
+    if (!FILEBASE_ACCESS_KEY) {
+      throw new Error('Missing R2_ACCESS_KEY_ID secret. Please set it in Supabase Edge Functions secrets (using Filebase key).');
     }
-    if (!R2_ACCESS_KEY) {
-      throw new Error('Missing R2_ACCESS_KEY_ID secret. Please set it in Supabase Edge Functions secrets.');
+    if (!FILEBASE_SECRET) {
+      throw new Error('Missing R2_SECRET_ACCESS_KEY secret. Please set it in Supabase Edge Functions secrets (using Filebase secret).');
     }
-    if (!R2_SECRET) {
-      throw new Error('Missing R2_SECRET_ACCESS_KEY secret. Please set it in Supabase Edge Functions secrets.');
-    }
-    if (!R2_BUCKET_NAME) {
-      throw new Error('Missing R2_BUCKET_NAME secret. Please set it in Supabase Edge Functions secrets.');
+    if (!FILEBASE_BUCKET_NAME) {
+      throw new Error('Missing R2_BUCKET_NAME secret. Please set it in Supabase Edge Functions secrets (using Filebase bucket name).');
     }
 
     const bytes = new Uint8Array(photoData);
@@ -51,33 +49,31 @@ serve(async (req) => {
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
-    const r2Endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-
-    // Inisialisasi S3Bucket client dengan konfigurasi R2
+    // Inisialisasi S3Bucket client dengan konfigurasi Filebase
     const bucket = new S3Bucket({
-      accessKeyId: R2_ACCESS_KEY,
-      secretKey: R2_SECRET,
-      region: R2_REGION,
-      endpoint: r2Endpoint,
-      bucket: R2_BUCKET_NAME,
+      accessKeyId: FILEBASE_ACCESS_KEY,
+      secretKey: FILEBASE_SECRET,
+      region: FILEBASE_REGION,
+      endpoint: FILEBASE_ENDPOINT,
+      bucket: FILEBASE_BUCKET_NAME,
       forcePathStyle: true,
     });
 
-    // Unggah objek ke R2
+    // Unggah objek ke Filebase S3
     await bucket.putObject(filename, bytes, {
       contentType: contentType,
     });
 
-    // URL publik untuk objek yang diunggah
-    const r2PublicUrl = `https://pub-${R2_ACCOUNT_ID}.r2.dev/${filename}`;
+    // URL publik untuk objek yang diunggah di Filebase
+    const filebasePublicUrl = `https://${FILEBASE_BUCKET_NAME}.s3.filebase.com/${filename}`;
 
     return new Response(
-      JSON.stringify({ r2PublicUrl }),
+      JSON.stringify({ r2PublicUrl: filebasePublicUrl }), // Menggunakan nama variabel yang sama untuk kompatibilitas klien
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (err: any) {
-    console.error("Edge Function error:", err); // Mengembalikan logging kesalahan
+    console.error("Edge Function error:", err);
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: corsHeaders }
