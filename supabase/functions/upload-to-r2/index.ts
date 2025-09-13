@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { encode } from "https://deno.land/std@0.190.0/encoding/hex.ts"; // Mengubah 'encodeHex' menjadi 'encode'
+import { encode } from "https://deno.land/std@0.190.0/encoding/hex.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +11,7 @@ async function sha256(data: Uint8Array | string): Promise<string> {
   const textEncoder = new TextEncoder();
   const dataBuffer = typeof data === 'string' ? textEncoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", dataBuffer);
-  return encode(new Uint8Array(hash)); // Mengubah 'encodeHex' menjadi 'encode'
+  return encode(new Uint8Array(hash));
 }
 
 // Helper function for HMAC-SHA256
@@ -54,16 +54,15 @@ async function getSignedHeaders(
 
   headers.set('x-amz-date', amzDate);
   headers.set('x-amz-content-sha256', await sha256(payload));
-  headers.set('host', headers.get('host') || '');
 
   const canonicalHeaders = Array.from(headers.entries())
-    .filter(([key]) => key.startsWith('x-amz-') || key === 'host' || key === 'content-type')
+    .filter(([key]) => key.startsWith('x-amz-') || key.toLowerCase() === 'host' || key.toLowerCase() === 'content-type')
     .map(([key, value]) => `${key.toLowerCase()}:${value.trim()}`)
     .sort()
     .join('\n');
 
   const signedHeaders = Array.from(headers.keys())
-    .filter(key => key.startsWith('x-amz-') || key === 'host' || key === 'content-type')
+    .filter(key => key.startsWith('x-amz-') || key.toLowerCase() === 'host' || key.toLowerCase() === 'content-type')
     .map(key => key.toLowerCase())
     .sort()
     .join(';');
@@ -71,9 +70,9 @@ async function getSignedHeaders(
   const canonicalRequest = [
     method,
     path,
-    '',
+    '', // Query string, which is empty
     canonicalHeaders,
-    '',
+    '', // Empty line after canonical headers
     signedHeaders,
     await sha256(payload),
   ].join('\n');
@@ -86,14 +85,14 @@ async function getSignedHeaders(
     await sha256(canonicalRequest),
   ].join('\n');
 
-  const textEncoder = new TextEncoder(); // Define textEncoder here
+  const textEncoder = new TextEncoder();
   const kSecret = textEncoder.encode(`AWS4${secretKey}`);
   const kDate = await hmacSha256(kSecret, dateStamp);
   const kRegion = await hmacSha256(kDate, region);
   const kService = await hmacSha256(kRegion, service);
   const kSigning = await hmacSha256(kService, 'aws4_request');
 
-  const signature = encode(await hmacSha256(kSigning, stringToSign)); // Mengubah 'encodeHex' menjadi 'encode'
+  const signature = encode(await hmacSha256(kSigning, stringToSign));
 
   headers.set(
     'Authorization',
@@ -117,11 +116,11 @@ serve(async (req) => {
     const R2_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
     const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
-    const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME') || 'your-bucket-name';
+    const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
     const R2_REGION = Deno.env.get('R2_REGION') || 'auto';
 
-    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET) {
-      throw new Error('R2 credentials not configured');
+    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET || !R2_BUCKET_NAME) {
+      throw new Error('R2 credentials (CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) not configured. Please set them in Supabase Edge Functions secrets.');
     }
 
     const bytes = new Uint8Array(photoData);
