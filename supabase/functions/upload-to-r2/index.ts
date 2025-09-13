@@ -51,12 +51,19 @@ serve(async (req) => {
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
+    const r2Endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+
+    // --- Logging untuk debugging endpoint dan bucket name ---
+    console.log("DEBUG: R2 Endpoint:", r2Endpoint);
+    console.log("DEBUG: R2 Bucket Name:", R2_BUCKET_NAME);
+    // --- Akhir logging ---
+
     // Inisialisasi S3Bucket client dengan konfigurasi R2
     const bucket = new S3Bucket({
       accessKeyId: R2_ACCESS_KEY,
       secretKey: R2_SECRET,
       region: R2_REGION,
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      endpoint: r2Endpoint,
       bucket: R2_BUCKET_NAME,
       forcePathStyle: true,
     });
