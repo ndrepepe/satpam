@@ -53,6 +53,17 @@ serve(async (req) => {
 
     const r2Endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
+    // --- Logging untuk debugging parameter S3Bucket ---
+    console.log("DEBUG: S3Bucket Init Params:", {
+      accessKeyId: R2_ACCESS_KEY, // Akan mencetak nilai, tapi kita sudah tahu panjangnya benar
+      secretKeyLength: R2_SECRET.length, // Hanya mencetak panjang secret key
+      region: R2_REGION,
+      endpoint: r2Endpoint,
+      bucket: R2_BUCKET_NAME,
+      forcePathStyle: true,
+    });
+    // --- Akhir logging ---
+
     // Inisialisasi S3Bucket client dengan konfigurasi R2
     const bucket = new S3Bucket({
       accessKeyId: R2_ACCESS_KEY,
