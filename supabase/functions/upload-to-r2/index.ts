@@ -26,14 +26,12 @@ serve(async (req) => {
       throw new Error('Missing required fields');
     }
 
-    // Menggunakan variabel lingkungan yang sama, tetapi nilainya akan dari Filebase
-    const FILEBASE_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID'); // Akan diisi dengan KEY dari Filebase
-    const FILEBASE_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY'); // Akan diisi dengan SECRET dari Filebase
-    const FILEBASE_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME'); // Akan diisi dengan nama bucket dari Filebase
-    const FILEBASE_ENDPOINT = 'https://s3.filebase.com'; // Endpoint S3 Filebase
+    const FILEBASE_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
+    const FILEBASE_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
+    const FILEBASE_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
+    const FILEBASE_ENDPOINT = 'https://s3.filebase.com';
     const FILEBASE_REGION = 'us-east-1'; // Region umum, seringkali tidak terlalu penting untuk Filebase
 
-    // Pemeriksaan untuk secrets Filebase
     if (!FILEBASE_ACCESS_KEY) {
       throw new Error('Missing R2_ACCESS_KEY_ID secret. Please set it in Supabase Edge Functions secrets (using Filebase key).');
     }
@@ -49,7 +47,17 @@ serve(async (req) => {
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
-    // Inisialisasi S3Bucket client dengan konfigurasi Filebase
+    // --- Logging untuk debugging parameter S3Bucket ---
+    console.log("DEBUG: S3Bucket Init Params (Filebase):", {
+      accessKeyId: FILEBASE_ACCESS_KEY,
+      secretKeyLength: FILEBASE_SECRET.length,
+      region: FILEBASE_REGION,
+      endpoint: FILEBASE_ENDPOINT,
+      bucket: FILEBASE_BUCKET_NAME,
+      forcePathStyle: true,
+    });
+    // --- Akhir logging ---
+
     const bucket = new S3Bucket({
       accessKeyId: FILEBASE_ACCESS_KEY,
       secretKey: FILEBASE_SECRET,
@@ -59,16 +67,14 @@ serve(async (req) => {
       forcePathStyle: true,
     });
 
-    // Unggah objek ke Filebase S3
     await bucket.putObject(filename, bytes, {
       contentType: contentType,
     });
 
-    // URL publik untuk objek yang diunggah di Filebase
     const filebasePublicUrl = `https://${FILEBASE_BUCKET_NAME}.s3.filebase.com/${filename}`;
 
     return new Response(
-      JSON.stringify({ r2PublicUrl: filebasePublicUrl }), // Menggunakan nama variabel yang sama untuk kompatibilitas klien
+      JSON.stringify({ r2PublicUrl: filebasePublicUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
