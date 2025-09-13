@@ -49,8 +49,8 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string; id_number?: string } | null;
-  locations: { name: string; posisi_gedung?: string | null } | null;
+  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Diperbarui menjadi objek tunggal
+  locations: { name: string; posisi_gedung?: string | null } | null; // Diperbarui menjadi objek tunggal
 }
 
 interface DailyScheduleSummaryEntry {
@@ -94,13 +94,13 @@ const SatpamSchedule: React.FC = () => {
 
 
   // Maps for quick lookup during XLSX processing
-  const satpamNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    satpamList.forEach(s => {
-      map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
-    });
-    return map;
-  }, [satpamList]);
+  // const satpamNameMap = useMemo(() => { // Dihapus karena tidak terpakai
+  //   const map = new Map<string, string>();
+  //   satpamList.forEach(s => {
+  //     map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
+  //   });
+  //   return map;
+  // }, [satpamList]);
 
   const idNumberToUserIdMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -199,8 +199,8 @@ const SatpamSchedule: React.FC = () => {
       const typedData = data as unknown as ScheduleEntry[];
       // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
       const sortedData = typedData.sort((a, b) => {
-        const nameA = a.profiles?.first_name || '';
-        const nameB = b.profiles?.first_name || '';
+        const nameA = a.profiles?.first_name || ''; // Akses langsung
+        const nameB = b.profiles?.first_name || ''; // Akses langsung
         return nameA.localeCompare(nameB);
       });
 
@@ -242,15 +242,15 @@ const SatpamSchedule: React.FC = () => {
         grouped.set(key, {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
-          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
-          idNumber: schedule.profiles?.id_number || 'N/A',
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A', // Akses langsung
+          idNumber: schedule.profiles?.id_number || 'N/A', // Akses langsung
           assignedLocationIds: new Set(),
           assignedBuildingPositions: new Set(),
         });
       }
       const entry = grouped.get(key)!;
       entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.posisi_gedung) {
+      if (schedule.locations?.posisi_gedung) { // Akses langsung
         entry.assignedBuildingPositions.add(schedule.locations.posisi_gedung);
       }
     });
@@ -309,15 +309,15 @@ const SatpamSchedule: React.FC = () => {
         grouped.set(key, {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
-          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
-          idNumber: schedule.profiles?.id_number || 'N/A',
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A', // Akses langsung
+          idNumber: schedule.profiles?.id_number || 'N/A', // Akses langsung
           assignedLocationIds: new Set(),
           locations: []
         });
       }
       const entry = grouped.get(key)!;
       entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.name) {
+      if (schedule.locations?.name) { // Akses langsung
         entry.locations.push(schedule.locations.name);
       }
     });

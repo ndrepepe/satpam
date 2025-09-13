@@ -41,9 +41,8 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  // Mengubah tipe profiles dan locations menjadi array objek atau null
-  profiles: { first_name: string; last_name: string; id_number?: string }[] | null;
-  locations: { name: string; posisi_gedung?: string | null }[] | null;
+  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Diperbarui menjadi objek tunggal
+  locations: { name: string; posisi_gedung?: string | null } | null; // Diperbarui menjadi objek tunggal
 }
 
 interface SatpamTab {
@@ -112,8 +111,8 @@ const SupervisorDashboard = () => {
 
         const formattedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-        // Fetch schedules for the selected date
-        const { data, error: scheduleError } = await supabase
+        // Fetch schedules for the selected date - FILTER SERVER-SIDE
+        const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
           .select(`
             id,
@@ -122,9 +121,8 @@ const SupervisorDashboard = () => {
             location_id,
             profiles (first_name, last_name, id_number),
             locations (name, posisi_gedung)
-          `);
-        // Filter by date after select to ensure correct type inference for nested objects
-        const scheduleData = data?.filter(s => s.schedule_date === formattedDate);
+          `)
+          .eq('schedule_date', formattedDate); // <-- SERVER-SIDE FILTERING
 
         if (scheduleError) throw scheduleError;
         setSchedules(scheduleData as unknown as ScheduleEntry[]); // Cast to unknown first
@@ -178,8 +176,8 @@ const SupervisorDashboard = () => {
 
     schedules.forEach(schedule => {
       const satpamId = schedule.user_id;
-      // Akses elemen pertama dari array profiles
-      const satpamName = schedule.profiles?.[0] ? `${schedule.profiles[0].first_name} ${schedule.profiles[0].last_name}` : 'N/A';
+      // Akses first_name dan last_name langsung dari objek profiles
+      const satpamName = schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A';
       const location = locationList.find(loc => loc.id === schedule.location_id);
 
       if (!groupedBySatpam.has(satpamId)) {
@@ -195,7 +193,6 @@ const SupervisorDashboard = () => {
       satpamEntry.assignedLocationIds.add(schedule.location_id);
 
       if (location) {
-        // Find the report for this specific user and location on the selected date
         const report = reports.find(r => r.user_id === satpamId && r.location_id === location.id);
         
         satpamEntry.locationsStatus.push({
@@ -210,23 +207,32 @@ const SupervisorDashboard = () => {
     const result: SatpamTab[] = [];
     groupedBySatpam.forEach(entry => {
       let locationDisplay: string;
-      const allLocationsCount = locationList.length;
-      const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
-      const gedungTimurLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur');
+      const allLocationsInDb = locationList.map(loc => loc.id);
+      const gedungBaratLocationsInDb = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat').map(loc => loc.id);
+      const gedungTimurLocationsInDb = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur').map(loc => loc.id);
 
-      const assignedToGedungBarat = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungBaratLocations.some(gbLoc => gbLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungBaratLocations.length && gedungBaratLocations.length > 0;
+      const assignedIdsArray = Array.from(entry.assignedLocationIds).sort();
 
-      const assignedToGedungTimur = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungTimurLocations.some(gtLoc => gtLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungTimurLocations.length && gedungTimurLocations.length > 0;
+      // Check if assigned to all locations in DB
+      const isAssignedToAllLocations = allLocationsInDb.length > 0 && 
+                                       assignedIdsArray.length === allLocationsInDb.length &&
+                                       assignedIdsArray.every(id => allLocationsInDb.includes(id));
 
-      if (entry.assignedLocationIds.size === allLocationsCount && allLocationsCount > 0) {
+      // Check if assigned to all locations in Gedung Barat
+      const isAssignedToAllGedungBarat = gedungBaratLocationsInDb.length > 0 &&
+                                         assignedIdsArray.length === gedungBaratLocationsInDb.length &&
+                                         assignedIdsArray.every(id => gedungBaratLocationsInDb.includes(id));
+
+      // Check if assigned to all locations in Gedung Timur
+      const isAssignedToAllGedungTimur = gedungTimurLocationsInDb.length > 0 &&
+                                         assignedIdsArray.length === gedungTimurLocationsInDb.length &&
+                                         assignedIdsArray.every(id => gedungTimurLocationsInDb.includes(id));
+
+      if (isAssignedToAllLocations) {
         locationDisplay = "Semua Gedung";
-      } else if (assignedToGedungBarat) {
+      } else if (isAssignedToAllGedungBarat) {
         locationDisplay = "Gedung Barat";
-      } else if (assignedToGedungTimur) {
+      } else if (isAssignedToAllGedungTimur) {
         locationDisplay = "Gedung Timur";
       } else if (entry.assignedLocationIds.size > 0) {
         locationDisplay = "Beberapa Lokasi";
@@ -243,8 +249,8 @@ const SupervisorDashboard = () => {
     });
 
     return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
-  }, [schedules, reports, locationList, selectedDate]);
-
+  }, [schedules, reports, locationList]);
+  
   if (sessionLoading || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
