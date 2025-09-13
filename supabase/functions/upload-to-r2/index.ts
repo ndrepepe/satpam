@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { encodeHex } from "https://deno.land/std@0.190.0/encoding/hex.ts";
+import { encode } from "https://deno.land/std@0.190.0/encoding/hex.ts"; // Mengubah import encodeHex menjadi encode
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +11,7 @@ async function sha256(data: Uint8Array | string): Promise<string> {
   const textEncoder = new TextEncoder();
   const dataBuffer = typeof data === 'string' ? textEncoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", dataBuffer);
-  return encodeHex(new Uint8Array(hash));
+  return encode(new Uint8Array(hash)); // Menggunakan encode
 }
 
 // Helper function for HMAC-SHA256 (implemented internally)
@@ -78,13 +78,21 @@ async function getSignedHeaders(
     await sha256(payload), // Hashed Payload
   ].join('\n');
 
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    await sha256(canonicalRequest),
+  ].join('\n');
+
   const kSecret = `AWS4${secretKey}`;
   const kDate = await hmacSha256(kSecret, dateStamp);
   const kRegion = await hmacSha256(kDate, region);
   const kService = await hmacSha256(kRegion, service);
   const kSigning = await hmacSha256(kService, 'aws4_request');
 
-  const signature = encodeHex(await hmacSha256(kSigning, stringToSign)); // Encode signature to hex
+  const signature = encode(await hmacSha256(kSigning, stringToSign)); // Menggunakan encode
 
   headers.set(
     'Authorization',
