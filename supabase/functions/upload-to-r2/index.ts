@@ -134,9 +134,11 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
-    const objectPath = `/${filename}`; // Path objek yang benar
+    
+    // Memperbaiki Canonical URI: Pastikan tidak ada double slash
+    const canonicalUriPath = `/${R2_BUCKET_NAME}/${filename}`; 
 
-    const url = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}${objectPath}`;
+    const url = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/${filename}`; // URL untuk permintaan PUT
 
     const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', contentType);
@@ -149,7 +151,7 @@ serve(async (req) => {
       R2_REGION,
       's3',
       'PUT',
-      objectPath, // Menggunakan objectPath yang sudah benar di sini
+      canonicalUriPath, // Menggunakan canonicalUriPath yang sudah benar
       requestHeaders,
       bytes
     );
