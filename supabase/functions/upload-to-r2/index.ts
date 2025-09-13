@@ -30,12 +30,20 @@ serve(async (req) => {
     const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
-    // R2_REGION tidak digunakan secara langsung oleh R2, tetapi diperlukan oleh klien S3
-    // Menggunakan 'us-east-1' sebagai placeholder untuk menghindari fallback ke endpoint AWS yang salah.
-    const R2_REGION = 'us-east-1'; 
+    const R2_REGION = 'us-east-1'; // Menggunakan region placeholder
 
-    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET || !R2_BUCKET_NAME) {
-      throw new Error('R2 credentials (CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) not configured. Please set them in Supabase Edge Functions secrets.');
+    // Pemeriksaan yang lebih spesifik untuk setiap secret
+    if (!R2_ACCOUNT_ID) {
+      throw new Error('Missing CLOUDFLARE_ACCOUNT_ID secret. Please set it in Supabase Edge Functions secrets.');
+    }
+    if (!R2_ACCESS_KEY) {
+      throw new Error('Missing R2_ACCESS_KEY_ID secret. Please set it in Supabase Edge Functions secrets.');
+    }
+    if (!R2_SECRET) {
+      throw new Error('Missing R2_SECRET_ACCESS_KEY secret. Please set it in Supabase Edge Functions secrets.');
+    }
+    if (!R2_BUCKET_NAME) {
+      throw new Error('Missing R2_BUCKET_NAME secret. Please set it in Supabase Edge Functions secrets.');
     }
 
     const bytes = new Uint8Array(photoData);
@@ -47,10 +55,10 @@ serve(async (req) => {
     const bucket = new S3Bucket({
       accessKeyId: R2_ACCESS_KEY,
       secretKey: R2_SECRET,
-      region: R2_REGION, // Menggunakan region placeholder
+      region: R2_REGION,
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       bucket: R2_BUCKET_NAME,
-      forcePathStyle: true, // Memaksa penggunaan path-style URL
+      forcePathStyle: true,
     });
 
     // Unggah objek ke R2
