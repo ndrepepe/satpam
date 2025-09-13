@@ -46,11 +46,6 @@ serve(async (req) => {
       throw new Error('Missing R2_BUCKET_NAME secret. Please set it in Supabase Edge Functions secrets.');
     }
 
-    // --- Logging langsung untuk debugging nilai kunci akses ---
-    console.log("DEBUG: R2_ACCESS_KEY (length):", R2_ACCESS_KEY?.length);
-    console.log("DEBUG: R2_SECRET (length):", R2_SECRET?.length);
-    // --- Akhir logging langsung ---
-
     const bytes = new Uint8Array(photoData);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileExt = contentType.split('/')[1] || 'jpg';
