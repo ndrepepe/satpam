@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.621.0"; // Import S3Client dan PutObjectCommand
+import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.621.0"; // Menggunakan AWS SDK
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,8 +21,7 @@ serve(async (req) => {
     const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
-    // R2_REGION tidak diperlukan secara eksplisit untuk endpoint R2, tapi bisa diatur ke 'auto' jika diperlukan oleh SDK
-    // const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; 
+    const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; // R2 sering menggunakan 'auto' atau placeholder
 
     if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET || !R2_BUCKET_NAME) {
       throw new Error('R2 credentials (CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) not configured. Please set them in Supabase Edge Functions secrets.');
@@ -35,7 +34,7 @@ serve(async (req) => {
 
     // Konfigurasi S3Client untuk Cloudflare R2
     const s3Client = new S3Client({
-      region: 'auto', // Cloudflare R2 menggunakan region 'auto'
+      region: R2_REGION, // Gunakan region yang ditentukan atau 'auto'
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
         accessKeyId: R2_ACCESS_KEY,
@@ -52,7 +51,7 @@ serve(async (req) => {
       ACL: 'public-read', // Atur ACL untuk akses publik
     });
 
-    // Kirim perintah ke R2
+    // Kirim perintah ke R2 menggunakan SDK
     await s3Client.send(putCommand);
 
     // URL publik untuk objek yang diunggah
