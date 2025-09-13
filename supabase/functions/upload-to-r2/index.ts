@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 // @ts-ignore
-import { S3 } from "https://deno.land/x/s3@0.5.0/mod.ts"; // Menggunakan Deno-native S3 client
+import { S3Bucket } from "https://deno.land/x/s3@0.5.0/mod.ts"; // Menggunakan S3Bucket yang benar
 
 // Deklarasikan Deno global untuk memenuhi kompiler TypeScript sisi klien
 declare const Deno: {
@@ -41,19 +41,18 @@ serve(async (req) => {
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
-    // Inisialisasi S3 client dengan konfigurasi R2
-    const s3 = new S3({
+    // Inisialisasi S3Bucket client dengan konfigurasi R2
+    const bucket = new S3Bucket({ // Menggunakan S3Bucket
       accessKeyId: R2_ACCESS_KEY,
       secretKey: R2_SECRET,
       region: R2_REGION,
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      bucket: R2_BUCKET_NAME, // Set bucket name here
+      bucket: R2_BUCKET_NAME, // Nama bucket harus disertakan di sini
     });
 
     // Unggah objek ke R2
-    await s3.putObject(filename, bytes, {
+    await bucket.putObject(filename, bytes, { // Memanggil putObject pada instance bucket
       contentType: contentType,
-      // ACL: 'public-read', // Opsi ini dihapus untuk kompatibilitas R2
     });
 
     // URL publik untuk objek yang diunggah
