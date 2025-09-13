@@ -1,5 +1,6 @@
+/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.621.0";
+import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.621.0"; // Menghapus impor Credentials dan Provider
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,20 +33,17 @@ serve(async (req) => {
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
 
+    // Definisikan provider kredensial kustom
+    const credentialsProvider = async () => ({ // Menghapus tipe eksplisit Provider<Credentials>
+      accessKeyId: R2_ACCESS_KEY,
+      secretAccessKey: R2_SECRET,
+    });
+
     // Konfigurasi S3Client untuk Cloudflare R2
     const s3Client = new S3Client({
       region: R2_REGION,
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: R2_ACCESS_KEY,
-        secretAccessKey: R2_SECRET,
-      },
-      // Override default credential provider chain to prevent file system access
-      credentialDefaultProvider: () => Promise.resolve({
-        accessKeyId: R2_ACCESS_KEY,
-        secretAccessKey: R2_SECRET,
-      }),
-      // Force path style for R2 bucket URLs
+      credentialProvider: credentialsProvider, // Gunakan provider kredensial kustom
       forcePathStyle: true,
     });
 
