@@ -1,6 +1,14 @@
-/// <reference lib="deno.ns" />
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.621.0";
+// @ts-ignore
+import { S3 } from "https://deno.land/x/s3@0.5.0/mod.ts"; // Menggunakan Deno-native S3 client
+
+// Deklarasikan Deno global untuk memenuhi kompiler TypeScript sisi klien
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,64 +21,47 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Edge Function: Request received.");
     const { userId, locationName, photoData, contentType } = await req.json();
     if (!userId || !locationName || !photoData || !contentType) {
-      console.error("Edge Function: Missing required fields in request body.");
       throw new Error('Missing required fields');
     }
-    console.log("Edge Function: Request body parsed successfully.");
 
     const R2_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
     const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
     const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME');
-    const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; // Default to 'auto' if not set
+    const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; // R2 sering menggunakan 'auto' atau placeholder
 
     if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET || !R2_BUCKET_NAME) {
-      console.error("Edge Function: Missing R2 environment variables.");
       throw new Error('R2 credentials (CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) not configured. Please set them in Supabase Edge Functions secrets.');
     }
-    console.log("Edge Function: R2 credentials loaded from environment.");
 
     const bytes = new Uint8Array(photoData);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileExt = contentType.split('/')[1] || 'jpg';
     const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
-    console.log(`Edge Function: Uploading file to R2: ${filename} with Content-Type: ${contentType}`);
 
-    const credentialsProvider = async () => {
-      console.log("Edge Function: Custom credentialsProvider called.");
-      return {
-        accessKeyId: R2_ACCESS_KEY,
-        secretAccessKey: R2_SECRET,
-      };
-    };
-
-    console.log("Edge Function: Initializing S3Client...");
-    const s3Client = new S3Client({
+    // Inisialisasi S3 client dengan konfigurasi R2
+    const s3 = new S3({
+      accessKeyId: R2_ACCESS_KEY,
+      secretKey: R2_SECRET,
       region: R2_REGION,
       endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentialProvider: credentialsProvider,
-      forcePathStyle: true,
-      runtime: "deno", // Secara eksplisit memberi tahu SDK bahwa ini adalah lingkungan Deno
+      bucket: R2_BUCKET_NAME, // Set bucket name here
     });
-    console.log("Edge Function: S3Client initialized.");
 
-    const putCommand = new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: filename,
-      Body: bytes,
-      ContentType: contentType,
-      ACL: 'public-read',
+    // Unggah objek ke R2
+    await s3.putObject(filename, bytes, {
+      contentType: contentType,
+      // R2 specific: ACL is usually handled by bucket policies or public access settings
+      // For public-read, we might need to set it in R2 bucket settings or ensure the endpoint is pub-
+      // The deno-s3 library might not directly support 'ACL' in putObject options,
+      // so we rely on R2 bucket settings for public access.
+      // If public access is needed, ensure your R2 bucket has a public access policy.
     });
-    console.log("Edge Function: PutObjectCommand created. Sending to R2...");
 
-    await s3Client.send(putCommand);
-    console.log("Edge Function: PutObjectCommand sent successfully to R2.");
-
+    // URL publik untuk objek yang diunggah
     const r2PublicUrl = `https://pub-${R2_ACCOUNT_ID}.r2.dev/${filename}`;
-    console.log(`Edge Function: R2 Public URL: ${r2PublicUrl}`);
 
     return new Response(
       JSON.stringify({ r2PublicUrl }),
@@ -78,7 +69,7 @@ serve(async (req) => {
     );
 
   } catch (err: any) {
-    console.error("Edge Function: Caught error:", err.message);
+    console.error("Edge Function error:", err);
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: corsHeaders }
