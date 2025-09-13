@@ -11,21 +11,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import EditLocationModal from './EditLocationModal';
-import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton component
 
 interface Location {
   id: string;
   name: string;
   qr_code_data: string;
   created_at: string;
-  posisi_gedung?: string | null;
+  posisi_gedung?: string | null; // Tambahkan field baru
 }
 
 interface LocationListProps {
-  refreshKey: number;
+  refreshKey: number; // Menambahkan prop refreshKey
 }
 
-const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
+const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => { // Menerima prop refreshKey
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -35,7 +34,7 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
     setLoading(true);
     const { data, error } = await supabase
       .from('locations')
-      .select('id, name, qr_code_data, created_at, posisi_gedung')
+      .select('id, name, qr_code_data, created_at, posisi_gedung') // Pilih field baru
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -49,11 +48,10 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
 
   useEffect(() => {
     fetchLocations();
-  }, [refreshKey]);
+  }, [refreshKey]); // Menambahkan refreshKey sebagai dependensi
 
   const handleDeleteLocation = async (id: string, name: string) => {
     if (window.confirm(`Apakah Anda yakin ingin menghapus lokasi "${name}"?`)) {
-      setLoading(true); // Set loading true during deletion
       try {
         const { error } = await supabase
           .from('locations')
@@ -64,12 +62,10 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
           throw error;
         }
         toast.success(`Lokasi "${name}" berhasil dihapus.`);
-        fetchLocations();
+        fetchLocations(); // Refresh the list after deletion
       } catch (error: any) {
         toast.error(`Gagal menghapus lokasi: ${error.message}`);
         console.error("Error deleting location:", error);
-      } finally {
-        setLoading(false); // Reset loading after deletion attempt
       }
     }
   };
@@ -82,7 +78,6 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
     setSelectedLocation(null);
-    fetchLocations(); // Refresh list after modal closes, in case of update
   };
 
   const handlePrintQrCode = (locationId: string) => {
@@ -92,64 +87,53 @@ const LocationList: React.FC<LocationListProps> = ({ refreshKey }) => {
   return (
     <div className="mt-6">
       <h3 className="text-xl font-semibold mb-4">Daftar Lokasi</h3>
-      {loading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nama Lokasi</TableHead>
-              <TableHead>Posisi Gedung</TableHead>
-              <TableHead>QR Code</TableHead>
-              <TableHead>Dibuat Pada</TableHead>
-              <TableHead className="text-right">Aksi</TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nama Lokasi</TableHead>
+            <TableHead>Posisi Gedung</TableHead> {/* Kolom baru */}
+            <TableHead>QR Code</TableHead>
+            <TableHead>Dibuat Pada</TableHead>
+            <TableHead className="text-right">Aksi</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {locations.map((loc) => (
+            <TableRow key={loc.id}>
+              <TableCell className="font-medium">{loc.name}</TableCell>
+              <TableCell>{loc.posisi_gedung || '-'}</TableCell> {/* Tampilkan posisi gedung */}
+              <TableCell>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => handlePrintQrCode(loc.id)}
+                  className="p-0 h-auto text-blue-500 hover:underline"
+                >
+                  Lihat/Cetak QR
+                </Button>
+              </TableCell>
+              <TableCell>{new Date(loc.created_at).toLocaleString()}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEditLocation({ id: loc.id, name: loc.name, posisi_gedung: loc.posisi_gedung })}
+                  className="mr-2"
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDeleteLocation(loc.id, loc.name)}
+                >
+                  Hapus
+                </Button>
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {locations.map((loc) => (
-              <TableRow key={loc.id}>
-                <TableCell className="font-medium">{loc.name}</TableCell>
-                <TableCell>{loc.posisi_gedung || '-'}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => handlePrintQrCode(loc.id)}
-                    className="p-0 h-auto text-blue-500 hover:underline"
-                    disabled={loading}
-                  >
-                    Lihat/Cetak QR
-                  </Button>
-                </TableCell>
-                <TableCell>{new Date(loc.created_at).toLocaleString()}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditLocation({ id: loc.id, name: loc.name, posisi_gedung: loc.posisi_gedung })}
-                    className="mr-2"
-                    disabled={loading}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeleteLocation(loc.id, loc.name)}
-                    disabled={loading}
-                  >
-                    Hapus
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+          ))}
+        </TableBody>
+      </Table>
 
       {selectedLocation && (
         <EditLocationModal

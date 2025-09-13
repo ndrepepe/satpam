@@ -37,7 +37,7 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
       const uniqueId = uuidv4();
       const qrData = `${window.location.origin}/scan-location?id=${uniqueId}`;
 
-      const { data: _data, error } = await supabase
+      const { data, error } = await supabase
         .from('locations')
         .insert({ name: values.name, qr_code_data: qrData, posisi_gedung: values.posisi_gedung })
         .select()
