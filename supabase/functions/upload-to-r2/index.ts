@@ -53,11 +53,7 @@ serve(async (req) => {
     // Unggah objek ke R2
     await s3.putObject(filename, bytes, {
       contentType: contentType,
-      // R2 specific: ACL is usually handled by bucket policies or public access settings
-      // For public-read, we might need to set it in R2 bucket settings or ensure the endpoint is pub-
-      // The deno-s3 library might not directly support 'ACL' in putObject options,
-      // so we rely on R2 bucket settings for public access.
-      // If public access is needed, ensure your R2 bucket has a public access policy.
+      // ACL: 'public-read', // Opsi ini dihapus untuk kompatibilitas R2
     });
 
     // URL publik untuk objek yang diunggah
