@@ -77,7 +77,7 @@ serve(async (req) => {
     );
 
   } catch (err: any) {
-    console.error("Edge Function error:", err);
+    console.error("Edge Function error:", err); // Mengembalikan logging kesalahan
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: corsHeaders }
