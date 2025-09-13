@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -25,10 +25,10 @@ interface Location {
   isCheckedToday?: boolean;
 }
 
-interface CheckAreaReport {
-  location_id: string;
-  created_at: string;
-}
+// interface CheckAreaReport { // Dihapus karena tidak terpakai di file ini
+//   location_id: string;
+//   created_at: string;
+// }
 
 const SatpamDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
@@ -56,7 +56,7 @@ const SatpamDashboard = () => {
         .single();
 
       if (profileError) {
-        console.error("Error fetching profile role:", profileError);
+        console.error("SatpamDashboard: Error fetching profile role:", profileError);
         toast.error("Gagal memuat peran pengguna.");
         navigate('/');
         return;

@@ -53,7 +53,14 @@ async function getSignedHeaders(
   const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, "");
 
   headers.set('x-amz-date', amzDate);
-  headers.set('x-amz-content-sha256', await sha256(payload));
+  const contentSha256 = await sha256(payload);
+  headers.set('x-amz-content-sha256', contentSha256);
+
+  // Ensure Host header is present and its value is used correctly in canonicalization
+  const hostHeaderValue = headers.get('Host');
+  if (!hostHeaderValue) {
+    throw new Error('Host header is missing from requestHeaders for signing.');
+  }
 
   const canonicalHeaders = Array.from(headers.entries())
     .filter(([key]) => key.startsWith('x-amz-') || key.toLowerCase() === 'host' || key.toLowerCase() === 'content-type')
@@ -74,7 +81,7 @@ async function getSignedHeaders(
     canonicalHeaders,
     '', // Empty line after canonical headers
     signedHeaders,
-    await sha256(payload),
+    contentSha256,
   ].join('\n');
 
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
@@ -134,6 +141,7 @@ serve(async (req) => {
     const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', contentType);
     requestHeaders.set('Host', `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
+    requestHeaders.set('x-amz-acl', 'public-read'); // Menambahkan header ini
 
     const signedHeaders = await getSignedHeaders(
       R2_ACCESS_KEY,

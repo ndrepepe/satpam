@@ -1,6 +1,6 @@
-import React from 'react';
+import { FC } from 'react';
 
-const CheckAreaReports = () => {
+const CheckAreaReports: FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <div className="text-center">

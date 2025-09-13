@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner'; // Perbaikan: Menghapus 's' yang tidak perlu
+import { toast } from 'sonner';
 
 const Index = () => {
   const { session, loading: sessionLoading, user } = useSession();
@@ -60,12 +60,7 @@ const Index = () => {
       </div>
     );
   }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-      <p className="text-xl text-gray-600 dark:text-gray-400">Mengarahkan Anda...</p>
-    </div>
-  );
+  return null; // Or render a default view if not redirecting
 };
 
 export default Index;

@@ -36,7 +36,7 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
 
   const onSubmit = async (values: PersonnelFormValues) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data: _data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {

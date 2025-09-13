@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './client';
-import { toast } from 'sonner'; // Import toast
+// import { toast } from 'sonner'; // Import toast // Dihapus karena tidak digunakan
 
 interface SessionContextType {
   session: Session | null;
