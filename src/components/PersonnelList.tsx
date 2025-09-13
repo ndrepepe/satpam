@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client'; // Hanya import supabase
+import { supabase } from '@/integrations/supabase/client';
 import {
   Table,
   TableBody,
@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import EditPersonnelModal from './EditPersonnelModal';
+import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton component
 
 interface Profile {
   id: string;
@@ -23,7 +24,7 @@ interface Profile {
 
 interface PersonnelListProps {
   isAdmin: boolean;
-  refreshKey: number; // New prop for refresh
+  refreshKey: number;
 }
 
 const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) => {
@@ -35,7 +36,6 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   const fetchPersonnel = async () => {
     setLoading(true);
     try {
-      // Invoke Edge Function to list users with profiles
       const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
 
       if (error) {
@@ -60,7 +60,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
 
   useEffect(() => {
     fetchPersonnel();
-  }, [refreshKey]); // Add refreshKey to dependencies
+  }, [refreshKey]);
 
   const handleDeletePersonnel = async (id: string, name: string) => {
     if (!isAdmin) {
@@ -68,8 +68,8 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
       return;
     }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
+      setLoading(true); // Set loading true during deletion
       try {
-        // Invoke Edge Function to delete user and profile
         const { data, error } = await supabase.functions.invoke('delete-user-and-profile', {
           body: { userId: id },
         });
@@ -84,10 +84,12 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
         }
 
         toast.success(`Personel "${name}" berhasil dihapus.`);
-        fetchPersonnel(); // Refresh the list after deletion
+        fetchPersonnel();
       } catch (error: any) {
         toast.error(`Gagal menghapus personel: ${error.message}`);
         console.error("Error deleting personnel:", error);
+      } finally {
+        setLoading(false); // Reset loading after deletion attempt
       }
     }
   };
@@ -104,53 +106,64 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
     setSelectedPersonnel(null);
+    fetchPersonnel(); // Refresh list after modal closes, in case of update
   };
 
   return (
     <div className="mt-6">
       <h3 className="text-xl font-semibold mb-4">Daftar Personel</h3>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nama Depan</TableHead>
-            <TableHead>Nama Belakang</TableHead>
-            <TableHead>Nomor ID</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Peran</TableHead>
-            {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {personnel.map((p) => (
-            <TableRow key={p.id}>
-              <TableCell className="font-medium">{p.first_name}</TableCell>
-              <TableCell>{p.last_name}</TableCell>
-              <TableCell>{p.id_number || '-'}</TableCell>
-              <TableCell>{p.email || '-'}</TableCell>
-              <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
-              {isAdmin && (
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditPersonnel(p)}
-                    className="mr-2"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
-                  >
-                    Hapus
-                  </Button>
-                </TableCell>
-              )}
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nama Depan</TableHead>
+              <TableHead>Nama Belakang</TableHead>
+              <TableHead>Nomor ID</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Peran</TableHead>
+              {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {personnel.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.first_name}</TableCell>
+                <TableCell>{p.last_name}</TableCell>
+                <TableCell>{p.id_number || '-'}</TableCell>
+                <TableCell>{p.email || '-'}</TableCell>
+                <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
+                {isAdmin && (
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditPersonnel(p)}
+                      className="mr-2"
+                      disabled={loading}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
+                      disabled={loading}
+                    >
+                      Hapus
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {selectedPersonnel && (
         <EditPersonnelModal
