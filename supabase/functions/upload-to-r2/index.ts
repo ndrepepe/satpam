@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { encodeHex } from "https://deno.land/std@0.190.0/encoding/hex.ts";
-import { hmacSha256 } from "https://deno.land/x/aws_s3_presign@v0.1.0/mod.ts"; // Import hmacSha256
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +12,29 @@ async function sha256(data: Uint8Array | string): Promise<string> {
   const dataBuffer = typeof data === 'string' ? textEncoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", dataBuffer);
   return encodeHex(new Uint8Array(hash));
+}
+
+// Helper function for HMAC-SHA256 (implemented internally)
+async function hmacSha256(key: string | Uint8Array, msg: string | Uint8Array): Promise<Uint8Array> {
+  const textEncoder = new TextEncoder();
+  const keyBuffer = typeof key === 'string' ? textEncoder.encode(key) : key;
+  const msgBuffer = typeof msg === 'string' ? textEncoder.encode(msg) : msg;
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBuffer,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    msgBuffer
+  );
+
+  return new Uint8Array(signature);
 }
 
 // AWS Signature Version 4 calculation (simplified for PUT object)
@@ -56,21 +78,13 @@ async function getSignedHeaders(
     await sha256(payload), // Hashed Payload
   ].join('\n');
 
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    credentialScope,
-    await sha256(canonicalRequest),
-  ].join('\n');
-
   const kSecret = `AWS4${secretKey}`;
   const kDate = await hmacSha256(kSecret, dateStamp);
   const kRegion = await hmacSha256(kDate, region);
   const kService = await hmacSha256(kRegion, service);
   const kSigning = await hmacSha256(kService, 'aws4_request');
 
-  const signature = await hmacSha256(kSigning, stringToSign);
+  const signature = encodeHex(await hmacSha256(kSigning, stringToSign)); // Encode signature to hex
 
   headers.set(
     'Authorization',
