@@ -13,6 +13,8 @@ const Navbar = () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
       toast.error("Gagal logout: " + error.message);
+      // Force redirect to login even if logout fails
+      navigate('/login'); 
     } else {
       toast.success("Berhasil logout!");
       navigate('/login');
