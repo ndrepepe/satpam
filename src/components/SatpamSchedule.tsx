@@ -197,6 +197,7 @@ const SatpamSchedule: React.FC = () => {
 
       setRangeSchedules(sortedData);
       setViewMode('range');
+      setSelectedDate(undefined); // Clear single day selection when in range mode
       toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
@@ -211,13 +212,12 @@ const SatpamSchedule: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedDate) {
-      setViewMode('singleDay');
+    if (selectedDate && viewMode === 'singleDay') { // Only fetch if in singleDay mode
       fetchSchedules(selectedDate);
-    } else {
+    } else if (!selectedDate && viewMode === 'singleDay') {
       setSchedules([]);
     }
-  }, [selectedDate]);
+  }, [selectedDate, viewMode]); // Add viewMode to dependency array
 
   const dailySchedulesSummary = useMemo(() => {
     const grouped = new Map<string, {
@@ -424,10 +424,10 @@ const SatpamSchedule: React.FC = () => {
         if (error) throw error;
 
         toast.success("Semua jadwal terkait berhasil dihapus.");
-        if (selectedDate) {
+        if (selectedDate && viewMode === 'singleDay') {
           fetchSchedules(selectedDate);
         }
-        if (startDate && endDate) {
+        if (startDate && endDate && viewMode === 'range') {
           fetchRangeSchedules();
         }
       } catch (error: any) {
@@ -529,10 +529,10 @@ const SatpamSchedule: React.FC = () => {
       setNewSelectedSatpamId(undefined);
       setNewSelectedBuildingPosition(undefined);
       
-      if (selectedDate) {
+      if (selectedDate && viewMode === 'singleDay') {
         await fetchSchedules(selectedDate);
       }
-      if (startDate && endDate) {
+      if (startDate && endDate && viewMode === 'range') {
         fetchRangeSchedules();
       }
     } catch (error: any) {
@@ -660,10 +660,10 @@ const SatpamSchedule: React.FC = () => {
         }
 
         toast.success("Jadwal berhasil diimpor dari file XLSX!");
-        if (selectedDate) {
+        if (selectedDate && viewMode === 'singleDay') {
           fetchSchedules(selectedDate);
         }
-        if (startDate && endDate) {
+        if (startDate && endDate && viewMode === 'range') {
           fetchRangeSchedules();
         }
       } catch (error: any) {
@@ -766,7 +766,12 @@ const SatpamSchedule: React.FC = () => {
                   <Calendar
                     mode="single"
                     selected={selectedDate}
-                    onSelect={setSelectedDate}
+                    onSelect={(date) => {
+                      setSelectedDate(date);
+                      setStartDate(undefined); // Clear range dates
+                      setEndDate(undefined);   // Clear range dates
+                      setViewMode('singleDay'); // Explicitly set to singleDay mode
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
