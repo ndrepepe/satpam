@@ -14,13 +14,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Hapus import Tabs, TabsContent, TabsList, TabsTrigger
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+// Import komponen Select baru
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Location {
   id: string;
@@ -41,11 +43,11 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Diperbarui menjadi objek tunggal
-  locations: { name: string; posisi_gedung?: string | null } | null; // Diperbarui menjadi objek tunggal
+  profiles: { first_name: string; last_name: string; id_number?: string } | null;
+  locations: { name: string; posisi_gedung?: string | null } | null;
 }
 
-interface SatpamTab {
+interface SatpamDisplayData { // Mengganti nama interface agar lebih jelas
   satpamId: string;
   satpamName: string;
   locationDisplay: string;
@@ -66,6 +68,7 @@ const SupervisorDashboard = () => {
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [reports, setReports] = useState<CheckAreaReport[]>([]);
   const [locationList, setLocationList] = useState<Location[]>([]);
+  const [selectedSatpamIdForDisplay, setSelectedSatpamIdForDisplay] = useState<string | undefined>(undefined); // State baru untuk dropdown
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -161,7 +164,7 @@ const SupervisorDashboard = () => {
     checkUserRole();
   }, [session, sessionLoading, user, navigate, selectedDate]);
 
-  const satpamTabs: SatpamTab[] = useMemo(() => {
+  const allSatpamDisplayData: SatpamDisplayData[] = useMemo(() => {
     const groupedBySatpam = new Map<string, {
       satpamId: string;
       satpamName: string;
@@ -176,7 +179,6 @@ const SupervisorDashboard = () => {
 
     schedules.forEach(schedule => {
       const satpamId = schedule.user_id;
-      // Akses first_name dan last_name langsung dari objek profiles
       const satpamName = schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A';
       const location = locationList.find(loc => loc.id === schedule.location_id);
 
@@ -204,7 +206,7 @@ const SupervisorDashboard = () => {
       }
     });
 
-    const result: SatpamTab[] = [];
+    const result: SatpamDisplayData[] = [];
     groupedBySatpam.forEach(entry => {
       let locationDisplay: string;
       const allLocationsInDb = locationList.map(loc => loc.id);
@@ -213,17 +215,14 @@ const SupervisorDashboard = () => {
 
       const assignedIdsArray = Array.from(entry.assignedLocationIds).sort();
 
-      // Check if assigned to all locations in DB
       const isAssignedToAllLocations = allLocationsInDb.length > 0 && 
                                        assignedIdsArray.length === allLocationsInDb.length &&
                                        assignedIdsArray.every(id => allLocationsInDb.includes(id));
 
-      // Check if assigned to all locations in Gedung Barat
       const isAssignedToAllGedungBarat = gedungBaratLocationsInDb.length > 0 &&
                                          assignedIdsArray.length === gedungBaratLocationsInDb.length &&
                                          assignedIdsArray.every(id => gedungBaratLocationsInDb.includes(id));
 
-      // Check if assigned to all locations in Gedung Timur
       const isAssignedToAllGedungTimur = gedungTimurLocationsInDb.length > 0 &&
                                          assignedIdsArray.length === gedungTimurLocationsInDb.length &&
                                          assignedIdsArray.every(id => gedungTimurLocationsInDb.includes(id));
@@ -248,8 +247,24 @@ const SupervisorDashboard = () => {
       });
     });
 
-    return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
-  }, [schedules, reports, locationList]);
+    const sortedResult = result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
+
+    // Set default selected satpam if not already set and there are results
+    if (sortedResult.length > 0 && selectedSatpamIdForDisplay === undefined) {
+      setSelectedSatpamIdForDisplay(sortedResult[0].satpamId);
+    } else if (sortedResult.length === 0 && selectedSatpamIdForDisplay !== undefined) {
+      setSelectedSatpamIdForDisplay(undefined); // Clear if no satpam
+    } else if (selectedSatpamIdForDisplay && !sortedResult.some(tab => tab.satpamId === selectedSatpamIdForDisplay)) {
+      // If the previously selected satpam is no longer in the list, reset to first or undefined
+      setSelectedSatpamIdForDisplay(sortedResult.length > 0 ? sortedResult[0].satpamId : undefined);
+    }
+
+    return sortedResult;
+  }, [schedules, reports, locationList, selectedSatpamIdForDisplay]); // Tambahkan selectedSatpamIdForDisplay sebagai dependensi
+
+  const currentSelectedSatpamTab = useMemo(() => {
+    return allSatpamDisplayData.find(tab => tab.satpamId === selectedSatpamIdForDisplay);
+  }, [allSatpamDisplayData, selectedSatpamIdForDisplay]);
   
   if (sessionLoading || loadingData) {
     return (
@@ -270,13 +285,13 @@ const SupervisorDashboard = () => {
           <CardTitle className="text-center">Dashboard Supervisor</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex justify-center">
+          <div className="mb-4 flex flex-col sm:flex-row justify-center items-center gap-4"> {/* Tambahkan gap-4 untuk jarak */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant={"outline"}
                   className={cn(
-                    "w-[280px] justify-start text-left font-normal",
+                    "w-full sm:w-[280px] justify-start text-left font-normal", // Sesuaikan lebar untuk responsif
                     !selectedDate && "text-muted-foreground"
                   )}
                 >
@@ -293,78 +308,87 @@ const SupervisorDashboard = () => {
                   />
               </PopoverContent>
             </Popover>
+
+            {/* Dropdown untuk memilih personel */}
+            <Select onValueChange={setSelectedSatpamIdForDisplay} value={selectedSatpamIdForDisplay}>
+              <SelectTrigger className="w-full sm:w-[280px]"> {/* Sesuaikan lebar untuk responsif */}
+                <SelectValue placeholder="Pilih Personel Satpam" />
+              </SelectTrigger>
+              <SelectContent>
+                {allSatpamDisplayData.map((satpam) => (
+                  <SelectItem key={satpam.satpamId} value={satpam.satpamId}>
+                    {satpam.satpamName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {satpamTabs.length === 0 ? (
+          {allSatpamDisplayData.length === 0 ? (
             <p className="text-center text-lg text-gray-600 dark:text-gray-400">
               Tidak ada jadwal yang ditetapkan untuk tanggal {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'ini'}.
             </p>
           ) : (
-            <Tabs defaultValue={satpamTabs[0]?.satpamId} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {satpamTabs.map((satpamTab) => (
-                  <TabsTrigger key={satpamTab.satpamId} value={satpamTab.satpamId}>
-                    {satpamTab.satpamName}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {satpamTabs.map((satpamTab) => (
-                <TabsContent key={satpamTab.satpamId} value={satpamTab.satpamId} className="mt-4">
-                  <h4 className="text-lg font-semibold mb-3">
-                    Lokasi Tugas {satpamTab.satpamName} ({satpamTab.locationDisplay})
-                  </h4>
-                  {satpamTab.locationsStatus.length === 0 ? (
-                    <p className="text-center text-gray-600 dark:text-gray-400">
-                      Tidak ada lokasi yang ditugaskan untuk personel ini pada tanggal ini.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-center">Nama Lokasi</TableHead>
-                            <TableHead className="text-center">Posisi Gedung</TableHead>
-                            <TableHead className="text-center">Status Cek</TableHead>
-                            <TableHead className="text-center">Terakhir Dicek</TableHead>
-                            <TableHead className="text-center">Foto</TableHead>
+            currentSelectedSatpamTab ? (
+              <div className="mt-4"> {/* Jarak antara dropdown dan konten */}
+                <h4 className="text-lg font-semibold mb-3">
+                  Lokasi Tugas {currentSelectedSatpamTab.satpamName} ({currentSelectedSatpamTab.locationDisplay})
+                </h4>
+                {currentSelectedSatpamTab.locationsStatus.length === 0 ? (
+                  <p className="text-center text-gray-600 dark:text-gray-400">
+                    Tidak ada lokasi yang ditugaskan untuk personel ini pada tanggal ini.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-center">Nama Lokasi</TableHead>
+                          <TableHead className="text-center">Posisi Gedung</TableHead>
+                          <TableHead className="text-center">Status Cek</TableHead>
+                          <TableHead className="text-center">Terakhir Dicek</TableHead>
+                          <TableHead className="text-center">Foto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentSelectedSatpamTab.locationsStatus.map((status) => (
+                          <TableRow key={status.location.id}>
+                            <TableCell className="font-medium text-center">{status.location.name}</TableCell>
+                            <TableCell className="text-center">{status.location.posisi_gedung || 'N/A'}</TableCell>
+                            <TableCell className="text-center">
+                              {status.isCheckedToday ? (
+                                <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
+                              ) : (
+                                <Badge variant="destructive">Belum Dicek</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">{status.lastCheckedAt || '-'}</TableCell>
+                            <TableCell className="text-center">
+                              {status.photoUrl ? (
+                                <a 
+                                  href={status.photoUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  Lihat Foto
+                                </a>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {satpamTab.locationsStatus.map((status) => (
-                            <TableRow key={status.location.id}>
-                              <TableCell className="font-medium text-center">{status.location.name}</TableCell>
-                              <TableCell className="text-center">{status.location.posisi_gedung || 'N/A'}</TableCell>
-                              <TableCell className="text-center">
-                                {status.isCheckedToday ? (
-                                  <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
-                                ) : (
-                                  <Badge variant="destructive">Belum Dicek</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center">{status.lastCheckedAt || '-'}</TableCell>
-                              <TableCell className="text-center">
-                                {status.photoUrl ? (
-                                  <a 
-                                    href={status.photoUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="text-blue-600 hover:underline"
-                                  >
-                                    Lihat Foto
-                                  </a>
-                                ) : (
-                                  '-'
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </TabsContent>
-              ))}
-            </Tabs>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-lg text-gray-600 dark:text-gray-400">
+                Pilih personel satpam dari dropdown untuk melihat jadwalnya.
+              </p>
+            )
           )}
         </CardContent>
       </Card>
