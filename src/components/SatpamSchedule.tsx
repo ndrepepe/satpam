@@ -573,11 +573,10 @@ const SatpamSchedule: React.FC = () => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName]; // Corrected: Access Sheets from workbook
+        const worksheet = workbook.Sheets[sheetName];
         
-        // Read data as array of arrays to get headers and rows
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-        if (rawData.length === 0) {
+        if (rawData.length < 2) { // Must have at least a header and one data row
           toast.error("File XLSX kosong atau tidak memiliki data.");
           setLoading(false);
           return;
@@ -588,7 +587,6 @@ const SatpamSchedule: React.FC = () => {
 
         const nameColIndex = headers.indexOf('Nama');
         const idColIndex = headers.indexOf('No ID');
-        // 'Posisi Gedung' is no longer a fixed column, its value is per date cell
 
         if (nameColIndex === -1 || idColIndex === -1) {
           toast.error("File XLSX harus memiliki kolom 'Nama' dan 'No ID'.");
@@ -598,22 +596,17 @@ const SatpamSchedule: React.FC = () => {
 
         const dateColumns: { header: string; index: number }[] = [];
         for (let i = 0; i < headers.length; i++) {
-          // Only consider columns that are not 'Nama' or 'No ID' as potential date columns
           if (i !== nameColIndex && i !== idColIndex) {
-            try {
-              // Attempt to parse header as a date (YYYY-MM-DD)
-              const parsedDate = new Date(headers[i]);
-              if (!isNaN(parsedDate.getTime())) { // Check if it's a valid date
-                dateColumns.push({ header: format(parsedDate, 'yyyy-MM-dd'), index: i });
-              }
-            } catch (e) {
-              // Not a date column, ignore
+            const headerValue = headers[i];
+            // Check if headerValue is a valid date string (e.g., YYYY-MM-DD)
+            if (headerValue && !isNaN(new Date(headerValue).getTime())) {
+              dateColumns.push({ header: format(new Date(headerValue), 'yyyy-MM-dd'), index: i });
             }
           }
         }
 
         if (dateColumns.length === 0) {
-          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (misal: YYYY-MM-DD).");
+          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (format: YYYY-MM-DD).");
           setLoading(false);
           return;
         }
@@ -622,11 +615,14 @@ const SatpamSchedule: React.FC = () => {
         let hasError = false;
 
         for (const row of dataRows) {
-          const satpamName = row[nameColIndex]?.toString().trim();
-          const satpamIdNumber = row[idColIndex]?.toString().trim();
+          const satpamName = row[nameColIndex] ? String(row[nameColIndex]).trim() : "";
+          const satpamIdNumber = row[idColIndex] ? String(row[idColIndex]).trim() : "";
+
+          if (!satpamName && !satpamIdNumber) {
+            continue; // Skip empty rows silently
+          }
 
           if (!satpamName || !satpamIdNumber) {
-            console.warn("Skipping row due to missing Nama or No ID:", row);
             toast.error(`Baris dilewati karena data tidak lengkap (Nama atau No ID kosong): ${row.join(', ')}`);
             hasError = true;
             break;
@@ -635,7 +631,7 @@ const SatpamSchedule: React.FC = () => {
           const userId = idNumberToUserIdMap.get(satpamIdNumber);
 
           if (!userId) {
-            toast.error(`Personel dengan No ID "${satpamIdNumber}" tidak ditemukan di daftar satpam.`);
+            toast.error(`Personel dengan No ID "${satpamIdNumber}" (${satpamName}) tidak ditemukan di daftar satpam.`);
             hasError = true;
             break;
           }
@@ -643,7 +639,7 @@ const SatpamSchedule: React.FC = () => {
           for (const dateCol of dateColumns) {
             const cellValue = row[dateCol.index]?.toString().trim();
             
-            if (cellValue) { // If cell has any value, it's a building position
+            if (cellValue) {
               const buildingPosition = cellValue;
               if (!['Semua Gedung', 'Gedung Barat', 'Gedung Timur'].includes(buildingPosition)) {
                 toast.error(`Posisi Gedung "${buildingPosition}" pada tanggal ${dateCol.header} untuk ${satpamName} tidak valid. Harap gunakan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur'.`);
@@ -667,7 +663,6 @@ const SatpamSchedule: React.FC = () => {
           return;
         }
 
-        // Send to Edge Function for bulk insertion
         const { data: edgeFunctionResponse, error: edgeFunctionError } = await supabase.functions.invoke('bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
@@ -685,7 +680,6 @@ const SatpamSchedule: React.FC = () => {
         if (selectedDate) {
           fetchSchedules(selectedDate);
         }
-        // Also refresh range schedules if they are currently displayed
         if (startDate && endDate) {
           fetchRangeSchedules();
         }
@@ -694,7 +688,6 @@ const SatpamSchedule: React.FC = () => {
         console.error("Error processing XLSX file:", error);
       } finally {
         setLoading(false);
-        // Clear the file input
         if (event.target) {
           event.target.value = '';
         }
@@ -704,24 +697,20 @@ const SatpamSchedule: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    // New headers: Nama, No ID, then dates
     const headers = ["Nama", "No ID"]; 
     const today = new Date();
-    // Add next 30 days as date headers
     for (let i = 0; i < 30; i++) { 
       headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
     }
 
     const ws_data: (string | null)[][] = [headers];
 
-    // Add some example data rows
     if (satpamList.length > 0) {
       const exampleSatpam1 = satpamList[0];
       const row1: (string | null)[] = [
         `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
         exampleSatpam1.id_number || 'ID001',
       ];
-      // Example assignments for dates
       for (let i = 0; i < 30; i++) { 
         if (i === 0) row1.push('Gedung Barat');
         else if (i === 2) row1.push('Semua Gedung');
@@ -743,7 +732,6 @@ const SatpamSchedule: React.FC = () => {
         ws_data.push(row2);
       }
     } else {
-      // Fallback if no satpam data
       const row1: (string | null)[] = ["Budi Santoso", "ID001"];
       for (let i = 0; i < 30; i++) {
         if (i === 0) row1.push('Gedung Barat');
