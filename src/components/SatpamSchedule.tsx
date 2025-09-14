@@ -172,7 +172,7 @@ const SatpamSchedule: React.FC = () => {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
 
-      console.log(`[DEBUG] Fetching range schedules from ${formattedStartDate} to ${formattedEndDate}`);
+      console.log(`[DEBUG] fetchRangeSchedules: Attempting to fetch from ${formattedStartDate} to ${formattedEndDate}`);
 
       const { data, error } = await supabase
         .from('schedules')
@@ -189,11 +189,11 @@ const SatpamSchedule: React.FC = () => {
         .order('schedule_date', { ascending: true }); 
 
       if (error) {
-        console.error("[DEBUG] Error fetching range schedules:", error);
+        console.error("[DEBUG] fetchRangeSchedules: Error fetching data:", error);
         throw error;
       }
       
-      console.log("[DEBUG] Raw data from Supabase for range schedules:", data);
+      console.log("[DEBUG] fetchRangeSchedules: Raw data received from Supabase:", data);
 
       const typedData = data as unknown as ScheduleEntry[];
       const sortedData = typedData.sort((a, b) => {
@@ -203,6 +203,7 @@ const SatpamSchedule: React.FC = () => {
       });
 
       setRangeSchedules(sortedData);
+      console.log("[DEBUG] fetchRangeSchedules: rangeSchedules state set to:", sortedData);
       setViewMode('range');
       setSelectedDate(undefined); // Clear single day selection when in range mode
       toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
@@ -293,7 +294,7 @@ const SatpamSchedule: React.FC = () => {
   }, [schedules, locationList]);
 
   const processedRangeSchedules = useMemo(() => {
-    console.log("[DEBUG] Recalculating processedRangeSchedules. Current rangeSchedules:", rangeSchedules);
+    console.log("[DEBUG] processedRangeSchedules: Recalculating. Current rangeSchedules state:", rangeSchedules);
     const grouped = new Map<string, {
       user_id: string;
       schedule_date: string;
@@ -351,7 +352,8 @@ const SatpamSchedule: React.FC = () => {
       return a.profileName.localeCompare(b.profileName);
     });
 
-    console.log("[DEBUG] Final processedRangeSchedules:", result);
+    console.log("[DEBUG] processedRangeSchedules: Final result:", result);
+    console.log("[DEBUG] processedRangeSchedules: Result length:", result.length);
     return result;
   }, [rangeSchedules, locationList]);
 
@@ -747,6 +749,9 @@ const SatpamSchedule: React.FC = () => {
     XLSX.writeFile(wb, "jadwal_template.xlsx");
     toast.info("Format file XLSX berhasil diunduh.");
   };
+
+  console.log("[DEBUG] Current viewMode for rendering:", viewMode);
+  console.log("[DEBUG] Current processedRangeSchedules length for rendering:", processedRangeSchedules.length);
 
   return (
     <div className="space-y-6">
