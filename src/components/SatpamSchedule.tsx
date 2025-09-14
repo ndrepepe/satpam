@@ -49,8 +49,8 @@ interface ScheduleEntry {
   schedule_date: string;
   user_id: string;
   location_id: string;
-  profiles: { first_name: string; last_name: string; id_number?: string } | null; // Diperbarui menjadi objek tunggal
-  locations: { name: string; posisi_gedung?: string | null } | null; // Diperbarui menjadi objek tunggal
+  profiles: { first_name: string; last_name: string; id_number?: string } | null;
+  locations: { name: string; posisi_gedung?: string | null } | null;
 }
 
 interface DailyScheduleSummaryEntry {
@@ -68,6 +68,7 @@ interface SummarizedRangeScheduleEntry {
   profileName: string;
   idNumber?: string;
   locationDisplay: string;
+  assignedLocationIds: Set<string>;
 }
 
 const SatpamSchedule: React.FC = () => {
@@ -78,6 +79,7 @@ const SatpamSchedule: React.FC = () => {
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung');
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'singleDay' | 'range'>('singleDay');
 
   // State for Reassign Dialog
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
@@ -91,16 +93,6 @@ const SatpamSchedule: React.FC = () => {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [rangeSchedules, setRangeSchedules] = useState<ScheduleEntry[]>([]);
-
-
-  // Maps for quick lookup during XLSX processing
-  // const satpamNameMap = useMemo(() => { // Dihapus karena tidak terpakai
-  //   const map = new Map<string, string>();
-  //   satpamList.forEach(s => {
-  //     map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
-  //   });
-  //   return map;
-  // }, [satpamList]);
 
   const idNumberToUserIdMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -197,14 +189,14 @@ const SatpamSchedule: React.FC = () => {
       if (error) throw error;
       
       const typedData = data as unknown as ScheduleEntry[];
-      // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
       const sortedData = typedData.sort((a, b) => {
-        const nameA = a.profiles?.first_name || ''; // Akses langsung
-        const nameB = b.profiles?.first_name || ''; // Akses langsung
+        const nameA = a.profiles?.first_name || '';
+        const nameB = b.profiles?.first_name || '';
         return nameA.localeCompare(nameB);
       });
 
       setRangeSchedules(sortedData);
+      setViewMode('range');
       toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
@@ -220,6 +212,7 @@ const SatpamSchedule: React.FC = () => {
 
   useEffect(() => {
     if (selectedDate) {
+      setViewMode('singleDay');
       fetchSchedules(selectedDate);
     } else {
       setSchedules([]);
@@ -242,15 +235,15 @@ const SatpamSchedule: React.FC = () => {
         grouped.set(key, {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
-          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A', // Akses langsung
-          idNumber: schedule.profiles?.id_number || 'N/A', // Akses langsung
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
+          idNumber: schedule.profiles?.id_number || 'N/A',
           assignedLocationIds: new Set(),
           assignedBuildingPositions: new Set(),
         });
       }
       const entry = grouped.get(key)!;
       entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.posisi_gedung) { // Akses langsung
+      if (schedule.locations?.posisi_gedung) {
         entry.assignedBuildingPositions.add(schedule.locations.posisi_gedung);
       }
     });
@@ -277,7 +270,7 @@ const SatpamSchedule: React.FC = () => {
       } else if (assignedToGedungTimur && !assignedToGedungBarat) {
         locationDisplay = "Gedung Timur";
       } else {
-        locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
+        locationDisplay = "Beberapa Lokasi";
       }
 
       result.push({
@@ -286,13 +279,12 @@ const SatpamSchedule: React.FC = () => {
         profileName: entry.profileName,
         idNumber: entry.idNumber,
         locationDisplay: locationDisplay,
-        assignedLocationIds: entry.assignedLocationIds, // Keep for edit logic
+        assignedLocationIds: entry.assignedLocationIds,
       });
     });
     return Array.from(result.values());
   }, [schedules, locationList]);
 
-  // New useMemo for summarizing range schedules
   const processedRangeSchedules = useMemo(() => {
     const grouped = new Map<string, {
       user_id: string;
@@ -300,7 +292,7 @@ const SatpamSchedule: React.FC = () => {
       profileName: string;
       idNumber?: string;
       assignedLocationIds: Set<string>;
-      locations: string[]; // To store names of assigned locations if not 'All'
+      locations: string[];
     }>();
 
     rangeSchedules.forEach(schedule => {
@@ -309,15 +301,15 @@ const SatpamSchedule: React.FC = () => {
         grouped.set(key, {
           user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
-          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A', // Akses langsung
-          idNumber: schedule.profiles?.id_number || 'N/A', // Akses langsung
+          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
+          idNumber: schedule.profiles?.id_number || 'N/A',
           assignedLocationIds: new Set(),
           locations: []
         });
       }
       const entry = grouped.get(key)!;
       entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.name) { // Akses langsung
+      if (schedule.locations?.name) {
         entry.locations.push(schedule.locations.name);
       }
     });
@@ -340,11 +332,11 @@ const SatpamSchedule: React.FC = () => {
         user_id: entry.user_id,
         profileName: entry.profileName,
         idNumber: entry.idNumber,
-        locationDisplay: locationDisplay
+        locationDisplay: locationDisplay,
+        assignedLocationIds: entry.assignedLocationIds,
       });
     });
 
-    // Sort the summarized results
     result.sort((a, b) => {
       const dateComparison = new Date(a.schedule_date).getTime() - new Date(b.schedule_date).getTime();
       if (dateComparison !== 0) return dateComparison;
@@ -353,7 +345,6 @@ const SatpamSchedule: React.FC = () => {
 
     return result;
   }, [rangeSchedules, locationList]);
-
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId || !selectedBuildingPosition) {
@@ -377,7 +368,6 @@ const SatpamSchedule: React.FC = () => {
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      // Check if the selected satpam is already scheduled for this date
       const { data: existingSchedules, error: existingSchedulesError } = await supabase
         .from('schedules')
         .select('id')
@@ -409,7 +399,7 @@ const SatpamSchedule: React.FC = () => {
 
       toast.success(`Jadwal berhasil ditambahkan untuk ${selectedBuildingPosition}!`);
       setSelectedSatpamId(undefined);
-      setSelectedBuildingPosition('Semua Gedung'); // Reset building position
+      setSelectedBuildingPosition('Semua Gedung');
       if (selectedDate) {
         fetchSchedules(selectedDate);
       }
@@ -437,7 +427,6 @@ const SatpamSchedule: React.FC = () => {
         if (selectedDate) {
           fetchSchedules(selectedDate);
         }
-        // Also refresh range schedules if they are currently displayed
         if (startDate && endDate) {
           fetchRangeSchedules();
         }
@@ -450,7 +439,7 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const handleEditScheduleAssignmentClick = (scheduleSummary: DailyScheduleSummaryEntry) => {
+  const handleEditScheduleAssignmentClick = (scheduleSummary: { user_id: string; schedule_date: string; locationDisplay: string; }) => {
     setOriginalUserId(scheduleSummary.user_id);
     setOriginalScheduleDate(scheduleSummary.schedule_date);
     setOriginalLocationAssignmentType(scheduleSummary.locationDisplay);
@@ -465,7 +454,6 @@ const SatpamSchedule: React.FC = () => {
       return;
     }
 
-    // Check if both satpam and building position are unchanged
     const isSatpamUnchanged = originalUserId === newSelectedSatpamId;
     const isBuildingPositionUnchanged = originalLocationAssignmentType === newSelectedBuildingPosition;
 
@@ -479,7 +467,6 @@ const SatpamSchedule: React.FC = () => {
     try {
       const formattedDate = originalScheduleDate;
 
-      // If changing satpam, check if the new satpam is already assigned on this date
       if (!isSatpamUnchanged) {
         const { data: existingAssignment, error: existingAssignmentError } = await supabase
           .from('schedules')
@@ -498,7 +485,6 @@ const SatpamSchedule: React.FC = () => {
         }
       }
 
-      // 1. Delete all existing schedule entries for the original user on the original date
       const { error: deleteError } = await supabase
         .from('schedules')
         .delete()
@@ -507,7 +493,6 @@ const SatpamSchedule: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // 2. Determine locations to insert based on the new selected building position
       let locationsToInsert: Location[] = [];
       if (newSelectedBuildingPosition === 'Semua Gedung') {
         locationsToInsert = locationList;
@@ -521,7 +506,6 @@ const SatpamSchedule: React.FC = () => {
         return;
       }
 
-      // 3. Insert new schedule entries for the new user and new building position
       const schedulesToInsert = [];
       for (const location of locationsToInsert) {
         schedulesToInsert.push({
@@ -576,7 +560,7 @@ const SatpamSchedule: React.FC = () => {
         const worksheet = workbook.Sheets[sheetName];
         
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-        if (rawData.length < 2) { // Must have at least a header and one data row
+        if (rawData.length < 2) {
           toast.error("File XLSX kosong atau tidak memiliki data.");
           setLoading(false);
           return;
@@ -598,7 +582,6 @@ const SatpamSchedule: React.FC = () => {
         for (let i = 0; i < headers.length; i++) {
           if (i !== nameColIndex && i !== idColIndex) {
             const headerValue = headers[i];
-            // Check if headerValue is a valid date string (e.g., YYYY-MM-DD)
             if (headerValue && !isNaN(new Date(headerValue).getTime())) {
               dateColumns.push({ header: format(new Date(headerValue), 'yyyy-MM-dd'), index: i });
             }
@@ -619,7 +602,7 @@ const SatpamSchedule: React.FC = () => {
           const satpamIdNumber = row[idColIndex] ? String(row[idColIndex]).trim() : "";
 
           if (!satpamName && !satpamIdNumber) {
-            continue; // Skip empty rows silently
+            continue;
           }
 
           if (!satpamName || !satpamIdNumber) {
@@ -860,7 +843,6 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* New Card for Date Range Schedule View */}
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Lihat Jadwal Berdasarkan Rentang Tanggal</CardTitle>
@@ -924,111 +906,116 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {processedRangeSchedules.length > 0 && (
+      {viewMode === 'range' ? (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Jadwal dalam Rentang Tanggal</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Personel</TableHead>
-                  <TableHead>No. ID</TableHead>
-                  <TableHead>Lokasi</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {processedRangeSchedules.map((schedule) => (
-                  <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
-                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>{schedule.locationDisplay}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(dailySchedulesSummary.find(s => s.user_id === schedule.user_id && s.schedule_date === schedule.schedule_date)!)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            {processedRangeSchedules.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Personel</TableHead>
+                    <TableHead>No. ID</TableHead>
+                    <TableHead>Lokasi</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {processedRangeSchedules.map((schedule) => (
+                    <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
+                      <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
+                      <TableCell>{schedule.profileName}</TableCell>
+                      <TableCell>{schedule.idNumber}</TableCell>
+                      <TableCell>{schedule.locationDisplay}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditScheduleAssignmentClick(schedule)}
+                            disabled={loading}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-center text-gray-600 dark:text-gray-400">
+                Tidak ada jadwal yang ditemukan untuk rentang tanggal yang dipilih.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dailySchedulesSummary.length === 0 ? (
+              <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Personel</TableHead>
+                    <TableHead>No. ID</TableHead>
+                    <TableHead>Lokasi</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dailySchedulesSummary.map((schedule) => (
+                    <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
+                      <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
+                      <TableCell>{schedule.profileName}</TableCell>
+                      <TableCell>{schedule.idNumber}</TableCell>
+                      <TableCell>{schedule.locationDisplay}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditScheduleAssignmentClick(schedule)}
+                            disabled={loading}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dailySchedulesSummary.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Personel</TableHead>
-                  <TableHead>No. ID</TableHead>
-                  <TableHead>Lokasi</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dailySchedulesSummary.map((schedule) => (
-                  <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
-                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>{schedule.locationDisplay}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(schedule)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Reassign Personel Dialog */}
       <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
