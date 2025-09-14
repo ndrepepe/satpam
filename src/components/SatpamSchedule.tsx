@@ -172,6 +172,8 @@ const SatpamSchedule: React.FC = () => {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
 
+      console.log(`[DEBUG] Fetching range schedules from ${formattedStartDate} to ${formattedEndDate}`);
+
       const { data, error } = await supabase
         .from('schedules')
         .select(`
@@ -186,8 +188,13 @@ const SatpamSchedule: React.FC = () => {
         .lte('schedule_date', formattedEndDate)
         .order('schedule_date', { ascending: true }); 
 
-      if (error) throw error;
+      if (error) {
+        console.error("[DEBUG] Error fetching range schedules:", error);
+        throw error;
+      }
       
+      console.log("[DEBUG] Raw data from Supabase for range schedules:", data);
+
       const typedData = data as unknown as ScheduleEntry[];
       const sortedData = typedData.sort((a, b) => {
         const nameA = a.profiles?.first_name || '';
@@ -286,6 +293,7 @@ const SatpamSchedule: React.FC = () => {
   }, [schedules, locationList]);
 
   const processedRangeSchedules = useMemo(() => {
+    console.log("[DEBUG] Recalculating processedRangeSchedules. Current rangeSchedules:", rangeSchedules);
     const grouped = new Map<string, {
       user_id: string;
       schedule_date: string;
@@ -343,6 +351,7 @@ const SatpamSchedule: React.FC = () => {
       return a.profileName.localeCompare(b.profileName);
     });
 
+    console.log("[DEBUG] Final processedRangeSchedules:", result);
     return result;
   }, [rangeSchedules, locationList]);
 
