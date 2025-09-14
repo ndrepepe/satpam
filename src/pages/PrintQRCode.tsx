@@ -66,10 +66,10 @@ const PrintQRCode = () => {
         <p className="text-2xl font-semibold">CEK AREA</p>
       </div>
 
-      <div className="p-4 border border-gray-300 rounded-lg shadow-md print:border-none print:shadow-none">
+      <div className="w-full max-w-[346px] p-4 border border-gray-300 rounded-lg shadow-md print:border-none print:shadow-none">
         <QrCode
           value={qrCodeValue}
-          size={384}
+          style={{ height: "auto", maxWidth: "100%", width: "100%" }}
           level="H"
           id="qrcode-print-svg"
         />
