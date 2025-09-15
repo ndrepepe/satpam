@@ -5,60 +5,7 @@ import { useSession } from '@/integrations/supabase/SessionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-
-// Helper function to resize and compress image
-const resizeAndCompressImage = (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const MAX_DIMENSION = 1280; // Max width or height for the image
-        const JPEG_QUALITY = 0.8; // JPEG quality (0.0 - 1.0)
-
-        let width = img.width;
-        let height = img.height;
-
-        // Resize logic: scale down if either dimension exceeds MAX_DIMENSION
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-          if (width > height) {
-            height *= MAX_DIMENSION / width;
-            width = MAX_DIMENSION;
-          } else {
-            width *= MAX_DIMENSION / height;
-            height = MAX_DIMENSION;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              // Fallback to original file if blob creation fails
-              reject(new Error("Failed to create blob from canvas."));
-            }
-          }, 'image/jpeg', JPEG_QUALITY); // Convert to JPEG with specified quality
-        } else {
-          reject(new Error("Failed to get 2D context from canvas."));
-        }
-      };
-      img.onerror = () => {
-        reject(new Error("Failed to load image for processing."));
-      };
-    };
-    reader.onerror = () => {
-      reject(new Error("Failed to read file."));
-    };
-  });
-};
+import { v4 as uuidv4 } from 'uuid';
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -107,29 +54,11 @@ const CheckAreaReport = () => {
     fetchLocation();
   }, [locationId, navigate, user, sessionLoading]);
 
-  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      const originalFile = event.target.files[0];
-      setLoading(true);
-      try {
-        const processedBlob = await resizeAndCompressImage(originalFile);
-        // Create a new File object from the processed Blob
-        const processedFile = new File([processedBlob], originalFile.name.replace(/\.[^/.]+$/, "") + '.jpeg', {
-          type: 'image/jpeg', // Force type to JPEG as we are converting to JPEG
-          lastModified: Date.now(),
-        });
-
-        setPhotoFile(processedFile);
-        setPhotoPreviewUrl(URL.createObjectURL(processedFile));
-        toast.success("Foto berhasil dioptimalkan!");
-      } catch (error: any) {
-        toast.error(`Gagal mengoptimalkan foto: ${error.message}. Menggunakan foto asli.`);
-        console.error("Error optimizing image:", error);
-        setPhotoFile(originalFile); // Fallback to original file
-        setPhotoPreviewUrl(URL.createObjectURL(originalFile));
-      } finally {
-        setLoading(false);
-      }
+      const file = event.target.files[0];
+      setPhotoFile(file);
+      setPhotoPreviewUrl(URL.createObjectURL(file));
     }
   };
 
@@ -146,47 +75,49 @@ const CheckAreaReport = () => {
     setLoading(true);
 
     try {
-      // Convert Blob to ArrayBuffer and then to a plain array of numbers for JSON transfer
-      const arrayBuffer = await photoFile.arrayBuffer();
-      const photoDataArray = Array.from(new Uint8Array(arrayBuffer));
+      // Baca file sebagai ArrayBuffer
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(photoFile);
+      });
 
-      // Invoke Edge Function to upload photo to Supabase Storage
-      const { data, error } = await supabase.functions.invoke('upload-photo', { // Mengganti nama fungsi
+      // Konversi ke array number untuk JSON
+      const photoData = Array.from(new Uint8Array(arrayBuffer));
+
+      // Panggil Edge Function
+      const { data, error } = await supabase.functions.invoke('upload-to-r2', {
         body: {
           userId: user.id,
-          locationId: locationId,
-          photoData: photoDataArray, // Send as array of numbers
+          locationName: locationName,
+          photoData: photoData,
           contentType: photoFile.type
         },
       });
 
       if (error) {
-        console.error("Error invoking upload-photo Edge Function:", error);
-        throw new Error(`Edge Function error: ${error.message}`);
+        throw error;
       }
 
-      if (data && data.error) {
-        throw new Error(`Edge Function returned error: ${data.error}`);
+      if (!data?.r2PublicUrl) {
+        throw new Error("Gagal mendapatkan URL publik foto dari R2.");
       }
 
-      if (!data?.publicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
-      }
-
-      // Simpan report ke database Supabase
+      // Simpan report ke database
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: data.publicUrl,
+          photo_url: data.r2PublicUrl,
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Supabase Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di R2 Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
@@ -235,7 +166,7 @@ const CheckAreaReport = () => {
               ref={fileInputRef}
               className="hidden"
             />
-            <Button onClick={handleTakePhotoClick} className="w-full" disabled={loading}>
+            <Button onClick={handleTakePhotoClick} className="w-full">
               Ambil Foto Selfie
             </Button>
           </div>
