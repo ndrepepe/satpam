@@ -5,6 +5,7 @@ import { useSession } from '@/integrations/supabase/SessionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'; // Import AWS SDK
 
 // Helper function to resize and compress image
 const resizeAndCompressImage = (file: File): Promise<Blob> => {
@@ -59,6 +60,27 @@ const resizeAndCompressImage = (file: File): Promise<Blob> => {
     };
   });
 };
+
+// Konfigurasi S3 Client untuk DomaiNesia
+const DOMAINESIA_ACCESS_KEY = import.meta.env.VITE_DOMAINESIA_ACCESS_KEY;
+const DOMAINESIA_SECRET_KEY = import.meta.env.VITE_DOMAINESIA_SECRET_KEY;
+const DOMAINESIA_ENDPOINT = import.meta.env.VITE_DOMAINESIA_ENDPOINT;
+const DOMAINESIA_BUCKET_NAME = import.meta.env.VITE_DOMAINESIA_BUCKET_NAME;
+
+if (!DOMAINESIA_ACCESS_KEY || !DOMAINESIA_SECRET_KEY || !DOMAINESIA_ENDPOINT || !DOMAINESIA_BUCKET_NAME) {
+  console.error("Missing DomaiNesia environment variables. Please check your .env file.");
+  // Throwing an error here might break the app, so we'll handle it gracefully later.
+}
+
+const s3Client = new S3Client({
+  region: 'us-east-1', // Region bisa generik untuk custom endpoint S3-compatible
+  endpoint: DOMAINESIA_ENDPOINT,
+  credentials: {
+    accessKeyId: DOMAINESIA_ACCESS_KEY || '',
+    secretAccessKey: DOMAINESIA_SECRET_KEY || ''
+  },
+  forcePathStyle: false, // Penting untuk beberapa S3-compatible storage
+});
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -143,49 +165,48 @@ const CheckAreaReport = () => {
       return;
     }
 
+    if (!DOMAINESIA_BUCKET_NAME || !DOMAINESIA_ENDPOINT) {
+      toast.error("Konfigurasi penyimpanan foto tidak lengkap. Harap hubungi administrator.");
+      console.error("DomaiNesia bucket name or endpoint is missing.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Generate a unique file path within the Supabase Storage bucket
+      // Generate a unique file path within the DomaiNesia bucket
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileExt = photoFile.type.split('/')[1] || 'jpeg'; // Ensure it's jpeg as we convert to it
-      const filePath = `${user.id}/${locationId}-${timestamp}.${fileExt}`; // Path in Supabase Storage
+      const filePath = `${user.id}/${locationId}-${timestamp}.${fileExt}`; // Path in DomaiNesia Object Storage
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('selfie-reports') // Menggunakan nama bucket baru
-        .upload(filePath, photoFile, {
-          contentType: photoFile.type,
-          upsert: false, // Jangan menimpa file yang sudah ada
-        });
+      // Upload to DomaiNesia Object Storage
+      const uploadCommand = new PutObjectCommand({
+        Bucket: DOMAINESIA_BUCKET_NAME,
+        Key: filePath,
+        Body: photoFile,
+        ContentType: photoFile.type,
+        ACL: 'public-read' // Mengizinkan akses publik ke file
+      });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      await s3Client.send(uploadCommand);
 
       // Dapatkan URL publik dari file yang diunggah
-      const { data: publicUrlData } = supabase.storage
-        .from('selfie-reports')
-        .getPublicUrl(filePath);
+      const publicUrl = `${DOMAINESIA_ENDPOINT}/${filePath}`;
 
-      if (!publicUrlData?.publicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
-      }
-
-      // Simpan report ke database
+      // Simpan report ke database Supabase
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: publicUrlData.publicUrl,
+          photo_url: publicUrl,
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Supabase Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di DomaiNesia Object Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
