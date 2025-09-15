@@ -5,7 +5,8 @@ import { useSession } from '@/integrations/supabase/SessionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'; // Import AWS SDK
+// Hapus import S3Client, PutObjectCommand karena sekarang ditangani oleh Edge Function
+// import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'; 
 
 // Helper function to resize and compress image
 const resizeAndCompressImage = (file: File): Promise<Blob> => {
@@ -61,26 +62,26 @@ const resizeAndCompressImage = (file: File): Promise<Blob> => {
   });
 };
 
-// Konfigurasi S3 Client untuk DomaiNesia
-const DOMAINESIA_ACCESS_KEY = import.meta.env.VITE_DOMAINESIA_ACCESS_KEY;
-const DOMAINESIA_SECRET_KEY = import.meta.env.VITE_DOMAINESIA_SECRET_KEY;
-const DOMAINESIA_ENDPOINT = import.meta.env.VITE_DOMAINESIA_ENDPOINT;
-const DOMAINESIA_BUCKET_NAME = import.meta.env.VITE_DOMAINESIA_BUCKET_NAME;
+// Hapus konfigurasi S3 Client dari client-side karena sekarang ditangani oleh Edge Function
+// const DOMAINESIA_ACCESS_KEY = import.meta.env.VITE_DOMAINESIA_ACCESS_KEY;
+// const DOMAINESIA_SECRET_KEY = import.meta.env.VITE_DOMAINESIA_SECRET_KEY;
+// const DOMAINESIA_ENDPOINT = import.meta.env.VITE_DOMAINESIA_ENDPOINT;
+// const DOMAINESIA_BUCKET_NAME = import.meta.env.VITE_DOMAINESIA_BUCKET_NAME;
 
-if (!DOMAINESIA_ACCESS_KEY || !DOMAINESIA_SECRET_KEY || !DOMAINESIA_ENDPOINT || !DOMAINESIA_BUCKET_NAME) {
-  console.error("Missing DomaiNesia environment variables. Please check your .env file.");
-  // Throwing an error here might break the app, so we'll handle it gracefully later.
-}
+// if (!DOMAINESIA_ACCESS_KEY || !DOMAINESIA_SECRET_KEY || !DOMAINESIA_ENDPOINT || !DOMAINESIA_BUCKET_NAME) {
+//   console.error("Missing DomaiNesia environment variables. Please check your .env file.");
+//   // Throwing an error here might break the app, so we'll handle it gracefully later.
+// }
 
-const s3Client = new S3Client({
-  region: 'us-east-1', // Region bisa generik untuk custom endpoint S3-compatible
-  endpoint: DOMAINESIA_ENDPOINT,
-  credentials: {
-    accessKeyId: DOMAINESIA_ACCESS_KEY || '',
-    secretAccessKey: DOMAINESIA_SECRET_KEY || ''
-  },
-  forcePathStyle: false, // Penting untuk beberapa S3-compatible storage
-});
+// const s3Client = new S3Client({
+//   region: 'us-east-1', // Region bisa generik untuk custom endpoint S3-compatible
+//   endpoint: DOMAINESIA_ENDPOINT,
+//   credentials: {
+//     accessKeyId: DOMAINESIA_ACCESS_KEY || '',
+//     secretAccessKey: DOMAINESIA_SECRET_KEY || ''
+//   },
+//   forcePathStyle: false, // Penting untuk beberapa S3-compatible storage
+// });
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -165,36 +166,37 @@ const CheckAreaReport = () => {
       return;
     }
 
-    if (!DOMAINESIA_BUCKET_NAME || !DOMAINESIA_ENDPOINT) {
-      toast.error("Konfigurasi penyimpanan foto tidak lengkap. Harap hubungi administrator.");
-      console.error("DomaiNesia bucket name or endpoint is missing.");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Generate a unique file path within the DomaiNesia bucket
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileExt = photoFile.type.split('/')[1] || 'jpeg'; // Ensure it's jpeg as we convert to it
-      const filePath = `${user.id}/${locationId}-${timestamp}.${fileExt}`; // Path in DomaiNesia Object Storage
+      // Convert Blob to ArrayBuffer to send to Edge Function
+      const fileBuffer = await photoFile.arrayBuffer();
 
-      // Convert Blob to ArrayBuffer
-      const arrayBuffer = await photoFile.arrayBuffer();
-
-      // Upload to DomaiNesia Object Storage
-      const uploadCommand = new PutObjectCommand({
-        Bucket: DOMAINESIA_BUCKET_NAME,
-        Key: filePath,
-        Body: new Uint8Array(arrayBuffer), // Pass ArrayBuffer wrapped in Uint8Array
-        ContentType: photoFile.type,
-        ACL: 'public-read' // Mengizinkan akses publik ke file
+      // Invoke Edge Function to upload photo
+      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('upload-report-photo', {
+        body: {
+          userId: user.id,
+          locationId: locationId,
+          contentType: photoFile.type,
+          fileBuffer: Array.from(new Uint8Array(fileBuffer)), // Convert ArrayBuffer to array of numbers for JSON serialization
+        },
       });
 
-      await s3Client.send(uploadCommand);
+      if (edgeFunctionError) {
+        console.error("Error invoking upload-report-photo Edge Function:", edgeFunctionError);
+        throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
+      }
+      
+      if (edgeFunctionData && edgeFunctionData.error) {
+        console.error("Edge Function returned an error:", edgeFunctionData.error);
+        throw new Error(`Edge Function returned error: ${edgeFunctionData.error}`);
+      }
 
-      // Dapatkan URL publik dari file yang diunggah
-      const publicUrl = `${DOMAINESIA_ENDPOINT}/${filePath}`;
+      const publicUrl = edgeFunctionData?.publicUrl;
+
+      if (!publicUrl) {
+        throw new Error("URL publik foto tidak diterima dari Edge Function.");
+      }
 
       // Simpan report ke database Supabase
       const { error: insertError } = await supabase
@@ -209,7 +211,7 @@ const CheckAreaReport = () => {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di DomaiNesia Object Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
