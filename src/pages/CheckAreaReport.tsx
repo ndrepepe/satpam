@@ -5,83 +5,7 @@ import { useSession } from '@/integrations/supabase/SessionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-// Hapus import S3Client, PutObjectCommand karena sekarang ditangani oleh Edge Function
-// import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'; 
-
-// Helper function to resize and compress image
-const resizeAndCompressImage = (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const MAX_DIMENSION = 1280; // Max width or height for the image
-        const JPEG_QUALITY = 0.8; // JPEG quality (0.0 - 1.0)
-
-        let width = img.width;
-        let height = img.height;
-
-        // Resize logic: scale down if either dimension exceeds MAX_DIMENSION
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-          if (width > height) {
-            height *= MAX_DIMENSION / width;
-            width = MAX_DIMENSION;
-          } else {
-            width *= MAX_DIMENSION / height;
-            height = MAX_DIMENSION;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              // Fallback to original file if blob creation fails
-              reject(new Error("Failed to create blob from canvas."));
-            }
-          }, 'image/jpeg', JPEG_QUALITY); // Convert to JPEG with specified quality
-        } else {
-          reject(new Error("Failed to get 2D context from canvas."));
-        }
-      };
-      img.onerror = () => {
-        reject(new Error("Failed to load image for processing."));
-      };
-    };
-    reader.onerror = () => {
-      reject(new Error("Failed to read file."));
-    };
-  });
-};
-
-// Hapus konfigurasi S3 Client dari client-side karena sekarang ditangani oleh Edge Function
-// const DOMAINESIA_ACCESS_KEY = import.meta.env.VITE_DOMAINESIA_ACCESS_KEY;
-// const DOMAINESIA_SECRET_KEY = import.meta.env.VITE_DOMAINESIA_SECRET_KEY;
-// const DOMAINESIA_ENDPOINT = import.meta.env.VITE_DOMAINESIA_ENDPOINT;
-// const DOMAINESIA_BUCKET_NAME = import.meta.env.VITE_DOMAINESIA_BUCKET_NAME;
-
-// if (!DOMAINESIA_ACCESS_KEY || !DOMAINESIA_SECRET_KEY || !DOMAINESIA_ENDPOINT || !DOMAINESIA_BUCKET_NAME) {
-//   console.error("Missing DomaiNesia environment variables. Please check your .env file.");
-//   // Throwing an error here might break the app, so we'll handle it gracefully later.
-// }
-
-// const s3Client = new S3Client({
-//   region: 'us-east-1', // Region bisa generik untuk custom endpoint S3-compatible
-//   endpoint: DOMAINESIA_ENDPOINT,
-//   credentials: {
-//     accessKeyId: DOMAINESIA_ACCESS_KEY || '',
-//     secretAccessKey: DOMAINESIA_SECRET_KEY || ''
-//   },
-//   forcePathStyle: false, // Penting untuk beberapa S3-compatible storage
-// });
+import { v4 as uuidv4 } from 'uuid';
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -130,29 +54,11 @@ const CheckAreaReport = () => {
     fetchLocation();
   }, [locationId, navigate, user, sessionLoading]);
 
-  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      const originalFile = event.target.files[0];
-      setLoading(true);
-      try {
-        const processedBlob = await resizeAndCompressImage(originalFile);
-        // Create a new File object from the processed Blob
-        const processedFile = new File([processedBlob], originalFile.name.replace(/\.[^/.]+$/, "") + '.jpeg', {
-          type: 'image/jpeg', // Force type to JPEG as we are converting to JPEG
-          lastModified: Date.now(),
-        });
-
-        setPhotoFile(processedFile);
-        setPhotoPreviewUrl(URL.createObjectURL(processedFile));
-        toast.success("Foto berhasil dioptimalkan!");
-      } catch (error: any) {
-        toast.error(`Gagal mengoptimalkan foto: ${error.message}. Menggunakan foto asli.`);
-        console.error("Error optimizing image:", error);
-        setPhotoFile(originalFile); // Fallback to original file
-        setPhotoPreviewUrl(URL.createObjectURL(originalFile));
-      } finally {
-        setLoading(false);
-      }
+      const file = event.target.files[0];
+      setPhotoFile(file);
+      setPhotoPreviewUrl(URL.createObjectURL(file));
     }
   };
 
@@ -169,49 +75,49 @@ const CheckAreaReport = () => {
     setLoading(true);
 
     try {
-      // Convert Blob to ArrayBuffer to send to Edge Function
-      const fileBuffer = await photoFile.arrayBuffer();
+      // Baca file sebagai ArrayBuffer
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(photoFile);
+      });
 
-      // Invoke Edge Function to upload photo
-      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('upload-report-photo', {
+      // Konversi ke array number untuk JSON
+      const photoData = Array.from(new Uint8Array(arrayBuffer));
+
+      // Panggil Edge Function
+      const { data, error } = await supabase.functions.invoke('upload-to-r2', {
         body: {
           userId: user.id,
-          locationId: locationId,
-          contentType: photoFile.type,
-          fileBuffer: Array.from(new Uint8Array(fileBuffer)), // Convert ArrayBuffer to array of numbers for JSON serialization
+          locationName: locationName,
+          photoData: photoData,
+          contentType: photoFile.type
         },
       });
 
-      if (edgeFunctionError) {
-        console.error("Error invoking upload-report-photo Edge Function:", edgeFunctionError);
-        throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
-      }
-      
-      if (edgeFunctionData && edgeFunctionData.error) {
-        console.error("Edge Function returned an error:", edgeFunctionData.error);
-        throw new Error(`Edge Function returned error: ${edgeFunctionData.error}`);
+      if (error) {
+        throw error;
       }
 
-      const publicUrl = edgeFunctionData?.publicUrl;
-
-      if (!publicUrl) {
-        throw new Error("URL publik foto tidak diterima dari Edge Function.");
+      if (!data?.r2PublicUrl) {
+        throw new Error("Gagal mendapatkan URL publik foto dari R2.");
       }
 
-      // Simpan report ke database Supabase
+      // Simpan report ke database
       const { error: insertError } = await supabase
         .from('check_area_reports')
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: publicUrl,
+          photo_url: data.r2PublicUrl,
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di R2 Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
@@ -260,7 +166,7 @@ const CheckAreaReport = () => {
               ref={fileInputRef}
               className="hidden"
             />
-            <Button onClick={handleTakePhotoClick} className="w-full" disabled={loading}>
+            <Button onClick={handleTakePhotoClick} className="w-full">
               Ambil Foto Selfie
             </Button>
           </div>

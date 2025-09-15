@@ -80,10 +80,10 @@ const AdminDashboard = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid h-auto w-full grid-cols-1 sm:h-10 sm:grid-cols-3">
+            <TabsList className="grid w-full grid-cols-3"> {/* Ubah grid-cols-2 menjadi grid-cols-3 */}
               <TabsTrigger value="personnel">Kelola Personel</TabsTrigger>
               <TabsTrigger value="locations">Kelola Lokasi</TabsTrigger>
-              <TabsTrigger value="schedule">Penjadwalan Satpam</TabsTrigger>
+              <TabsTrigger value="schedule">Penjadwalan Satpam</TabsTrigger> {/* Tab baru */}
             </TabsList>
             <TabsContent value="personnel" className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Tambah Personel Satpam Baru</h3>

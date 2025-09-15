@@ -68,7 +68,6 @@ interface SummarizedRangeScheduleEntry {
   profileName: string;
   idNumber?: string;
   locationDisplay: string;
-  assignedLocationIds: Set<string>;
 }
 
 const SatpamSchedule: React.FC = () => {
@@ -79,7 +78,6 @@ const SatpamSchedule: React.FC = () => {
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung');
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'singleDay' | 'range'>('singleDay');
 
   // State for Reassign Dialog
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
@@ -93,6 +91,16 @@ const SatpamSchedule: React.FC = () => {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [rangeSchedules, setRangeSchedules] = useState<ScheduleEntry[]>([]);
+
+
+  // Maps for quick lookup during XLSX processing
+  const satpamNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    satpamList.forEach(s => {
+      map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
+    });
+    return map;
+  }, [satpamList]);
 
   const idNumberToUserIdMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -172,8 +180,6 @@ const SatpamSchedule: React.FC = () => {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
 
-      console.log(`[DEBUG] fetchRangeSchedules: Attempting to fetch from ${formattedStartDate} to ${formattedEndDate}`);
-
       const { data, error } = await supabase
         .from('schedules')
         .select(`
@@ -188,14 +194,10 @@ const SatpamSchedule: React.FC = () => {
         .lte('schedule_date', formattedEndDate)
         .order('schedule_date', { ascending: true }); 
 
-      if (error) {
-        console.error("[DEBUG] fetchRangeSchedules: Error fetching data:", error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log("[DEBUG] fetchRangeSchedules: Raw data received from Supabase:", data);
-
       const typedData = data as unknown as ScheduleEntry[];
+      // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
       const sortedData = typedData.sort((a, b) => {
         const nameA = a.profiles?.first_name || '';
         const nameB = b.profiles?.first_name || '';
@@ -203,9 +205,6 @@ const SatpamSchedule: React.FC = () => {
       });
 
       setRangeSchedules(sortedData);
-      console.log("[DEBUG] fetchRangeSchedules: rangeSchedules state set to:", sortedData);
-      setViewMode('range');
-      setSelectedDate(undefined); // Clear single day selection when in range mode
       toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
@@ -220,12 +219,12 @@ const SatpamSchedule: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedDate && viewMode === 'singleDay') { // Only fetch if in singleDay mode
+    if (selectedDate) {
       fetchSchedules(selectedDate);
-    } else if (!selectedDate && viewMode === 'singleDay') {
+    } else {
       setSchedules([]);
     }
-  }, [selectedDate, viewMode]); // Add viewMode to dependency array
+  }, [selectedDate]);
 
   const dailySchedulesSummary = useMemo(() => {
     const grouped = new Map<string, {
@@ -278,7 +277,7 @@ const SatpamSchedule: React.FC = () => {
       } else if (assignedToGedungTimur && !assignedToGedungBarat) {
         locationDisplay = "Gedung Timur";
       } else {
-        locationDisplay = "Beberapa Lokasi";
+        locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
       }
 
       result.push({
@@ -287,21 +286,21 @@ const SatpamSchedule: React.FC = () => {
         profileName: entry.profileName,
         idNumber: entry.idNumber,
         locationDisplay: locationDisplay,
-        assignedLocationIds: entry.assignedLocationIds,
+        assignedLocationIds: entry.assignedLocationIds, // Keep for edit logic
       });
     });
     return Array.from(result.values());
   }, [schedules, locationList]);
 
+  // New useMemo for summarizing range schedules
   const processedRangeSchedules = useMemo(() => {
-    console.log("[DEBUG] processedRangeSchedules: Recalculating. Current rangeSchedules state:", rangeSchedules);
     const grouped = new Map<string, {
       user_id: string;
       schedule_date: string;
       profileName: string;
       idNumber?: string;
       assignedLocationIds: Set<string>;
-      locations: string[];
+      locations: string[]; // To store names of assigned locations if not 'All'
     }>();
 
     rangeSchedules.forEach(schedule => {
@@ -341,21 +340,20 @@ const SatpamSchedule: React.FC = () => {
         user_id: entry.user_id,
         profileName: entry.profileName,
         idNumber: entry.idNumber,
-        locationDisplay: locationDisplay,
-        assignedLocationIds: entry.assignedLocationIds,
+        locationDisplay: locationDisplay
       });
     });
 
+    // Sort the summarized results
     result.sort((a, b) => {
       const dateComparison = new Date(a.schedule_date).getTime() - new Date(b.schedule_date).getTime();
       if (dateComparison !== 0) return dateComparison;
       return a.profileName.localeCompare(b.profileName);
     });
 
-    console.log("[DEBUG] processedRangeSchedules: Final result:", result);
-    console.log("[DEBUG] processedRangeSchedules: Result length:", result.length);
     return result;
   }, [rangeSchedules, locationList]);
+
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId || !selectedBuildingPosition) {
@@ -379,6 +377,7 @@ const SatpamSchedule: React.FC = () => {
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
+      // Check if the selected satpam is already scheduled for this date
       const { data: existingSchedules, error: existingSchedulesError } = await supabase
         .from('schedules')
         .select('id')
@@ -410,7 +409,7 @@ const SatpamSchedule: React.FC = () => {
 
       toast.success(`Jadwal berhasil ditambahkan untuk ${selectedBuildingPosition}!`);
       setSelectedSatpamId(undefined);
-      setSelectedBuildingPosition('Semua Gedung');
+      setSelectedBuildingPosition('Semua Gedung'); // Reset building position
       if (selectedDate) {
         fetchSchedules(selectedDate);
       }
@@ -435,10 +434,11 @@ const SatpamSchedule: React.FC = () => {
         if (error) throw error;
 
         toast.success("Semua jadwal terkait berhasil dihapus.");
-        if (selectedDate && viewMode === 'singleDay') {
+        if (selectedDate) {
           fetchSchedules(selectedDate);
         }
-        if (startDate && endDate && viewMode === 'range') {
+        // Also refresh range schedules if they are currently displayed
+        if (startDate && endDate) {
           fetchRangeSchedules();
         }
       } catch (error: any) {
@@ -450,7 +450,7 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const handleEditScheduleAssignmentClick = (scheduleSummary: { user_id: string; schedule_date: string; locationDisplay: string; }) => {
+  const handleEditScheduleAssignmentClick = (scheduleSummary: DailyScheduleSummaryEntry) => {
     setOriginalUserId(scheduleSummary.user_id);
     setOriginalScheduleDate(scheduleSummary.schedule_date);
     setOriginalLocationAssignmentType(scheduleSummary.locationDisplay);
@@ -465,6 +465,7 @@ const SatpamSchedule: React.FC = () => {
       return;
     }
 
+    // Check if both satpam and building position are unchanged
     const isSatpamUnchanged = originalUserId === newSelectedSatpamId;
     const isBuildingPositionUnchanged = originalLocationAssignmentType === newSelectedBuildingPosition;
 
@@ -478,6 +479,7 @@ const SatpamSchedule: React.FC = () => {
     try {
       const formattedDate = originalScheduleDate;
 
+      // If changing satpam, check if the new satpam is already assigned on this date
       if (!isSatpamUnchanged) {
         const { data: existingAssignment, error: existingAssignmentError } = await supabase
           .from('schedules')
@@ -496,6 +498,7 @@ const SatpamSchedule: React.FC = () => {
         }
       }
 
+      // 1. Delete all existing schedule entries for the original user on the original date
       const { error: deleteError } = await supabase
         .from('schedules')
         .delete()
@@ -504,6 +507,7 @@ const SatpamSchedule: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
+      // 2. Determine locations to insert based on the new selected building position
       let locationsToInsert: Location[] = [];
       if (newSelectedBuildingPosition === 'Semua Gedung') {
         locationsToInsert = locationList;
@@ -517,6 +521,7 @@ const SatpamSchedule: React.FC = () => {
         return;
       }
 
+      // 3. Insert new schedule entries for the new user and new building position
       const schedulesToInsert = [];
       for (const location of locationsToInsert) {
         schedulesToInsert.push({
@@ -540,10 +545,10 @@ const SatpamSchedule: React.FC = () => {
       setNewSelectedSatpamId(undefined);
       setNewSelectedBuildingPosition(undefined);
       
-      if (selectedDate && viewMode === 'singleDay') {
+      if (selectedDate) {
         await fetchSchedules(selectedDate);
       }
-      if (startDate && endDate && viewMode === 'range') {
+      if (startDate && endDate) {
         fetchRangeSchedules();
       }
     } catch (error: any) {
@@ -568,10 +573,11 @@ const SatpamSchedule: React.FC = () => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+        const worksheet = workbook.Sheets[sheetName]; // Corrected: Access Sheets from workbook
         
+        // Read data as array of arrays to get headers and rows
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-        if (rawData.length < 2) {
+        if (rawData.length === 0) {
           toast.error("File XLSX kosong atau tidak memiliki data.");
           setLoading(false);
           return;
@@ -582,6 +588,7 @@ const SatpamSchedule: React.FC = () => {
 
         const nameColIndex = headers.indexOf('Nama');
         const idColIndex = headers.indexOf('No ID');
+        // 'Posisi Gedung' is no longer a fixed column, its value is per date cell
 
         if (nameColIndex === -1 || idColIndex === -1) {
           toast.error("File XLSX harus memiliki kolom 'Nama' dan 'No ID'.");
@@ -591,16 +598,22 @@ const SatpamSchedule: React.FC = () => {
 
         const dateColumns: { header: string; index: number }[] = [];
         for (let i = 0; i < headers.length; i++) {
+          // Only consider columns that are not 'Nama' or 'No ID' as potential date columns
           if (i !== nameColIndex && i !== idColIndex) {
-            const headerValue = headers[i];
-            if (headerValue && !isNaN(new Date(headerValue).getTime())) {
-              dateColumns.push({ header: format(new Date(headerValue), 'yyyy-MM-dd'), index: i });
+            try {
+              // Attempt to parse header as a date (YYYY-MM-DD)
+              const parsedDate = new Date(headers[i]);
+              if (!isNaN(parsedDate.getTime())) { // Check if it's a valid date
+                dateColumns.push({ header: format(parsedDate, 'yyyy-MM-dd'), index: i });
+              }
+            } catch (e) {
+              // Not a date column, ignore
             }
           }
         }
 
         if (dateColumns.length === 0) {
-          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (format: YYYY-MM-DD).");
+          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (misal: YYYY-MM-DD).");
           setLoading(false);
           return;
         }
@@ -609,14 +622,11 @@ const SatpamSchedule: React.FC = () => {
         let hasError = false;
 
         for (const row of dataRows) {
-          const satpamName = row[nameColIndex] ? String(row[nameColIndex]).trim() : "";
-          const satpamIdNumber = row[idColIndex] ? String(row[idColIndex]).trim() : "";
-
-          if (!satpamName && !satpamIdNumber) {
-            continue;
-          }
+          const satpamName = row[nameColIndex]?.toString().trim();
+          const satpamIdNumber = row[idColIndex]?.toString().trim();
 
           if (!satpamName || !satpamIdNumber) {
+            console.warn("Skipping row due to missing Nama or No ID:", row);
             toast.error(`Baris dilewati karena data tidak lengkap (Nama atau No ID kosong): ${row.join(', ')}`);
             hasError = true;
             break;
@@ -625,7 +635,7 @@ const SatpamSchedule: React.FC = () => {
           const userId = idNumberToUserIdMap.get(satpamIdNumber);
 
           if (!userId) {
-            toast.error(`Personel dengan No ID "${satpamIdNumber}" (${satpamName}) tidak ditemukan di daftar satpam.`);
+            toast.error(`Personel dengan No ID "${satpamIdNumber}" tidak ditemukan di daftar satpam.`);
             hasError = true;
             break;
           }
@@ -633,7 +643,7 @@ const SatpamSchedule: React.FC = () => {
           for (const dateCol of dateColumns) {
             const cellValue = row[dateCol.index]?.toString().trim();
             
-            if (cellValue) {
+            if (cellValue) { // If cell has any value, it's a building position
               const buildingPosition = cellValue;
               if (!['Semua Gedung', 'Gedung Barat', 'Gedung Timur'].includes(buildingPosition)) {
                 toast.error(`Posisi Gedung "${buildingPosition}" pada tanggal ${dateCol.header} untuk ${satpamName} tidak valid. Harap gunakan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur'.`);
@@ -657,6 +667,7 @@ const SatpamSchedule: React.FC = () => {
           return;
         }
 
+        // Send to Edge Function for bulk insertion
         const { data: edgeFunctionResponse, error: edgeFunctionError } = await supabase.functions.invoke('bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
@@ -671,10 +682,11 @@ const SatpamSchedule: React.FC = () => {
         }
 
         toast.success("Jadwal berhasil diimpor dari file XLSX!");
-        if (selectedDate && viewMode === 'singleDay') {
+        if (selectedDate) {
           fetchSchedules(selectedDate);
         }
-        if (startDate && endDate && viewMode === 'range') {
+        // Also refresh range schedules if they are currently displayed
+        if (startDate && endDate) {
           fetchRangeSchedules();
         }
       } catch (error: any) {
@@ -682,6 +694,7 @@ const SatpamSchedule: React.FC = () => {
         console.error("Error processing XLSX file:", error);
       } finally {
         setLoading(false);
+        // Clear the file input
         if (event.target) {
           event.target.value = '';
         }
@@ -691,20 +704,24 @@ const SatpamSchedule: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
+    // New headers: Nama, No ID, then dates
     const headers = ["Nama", "No ID"]; 
     const today = new Date();
+    // Add next 30 days as date headers
     for (let i = 0; i < 30; i++) { 
       headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
     }
 
     const ws_data: (string | null)[][] = [headers];
 
+    // Add some example data rows
     if (satpamList.length > 0) {
       const exampleSatpam1 = satpamList[0];
       const row1: (string | null)[] = [
         `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
         exampleSatpam1.id_number || 'ID001',
       ];
+      // Example assignments for dates
       for (let i = 0; i < 30; i++) { 
         if (i === 0) row1.push('Gedung Barat');
         else if (i === 2) row1.push('Semua Gedung');
@@ -726,6 +743,7 @@ const SatpamSchedule: React.FC = () => {
         ws_data.push(row2);
       }
     } else {
+      // Fallback if no satpam data
       const row1: (string | null)[] = ["Budi Santoso", "ID001"];
       for (let i = 0; i < 30; i++) {
         if (i === 0) row1.push('Gedung Barat');
@@ -749,9 +767,6 @@ const SatpamSchedule: React.FC = () => {
     XLSX.writeFile(wb, "jadwal_template.xlsx");
     toast.info("Format file XLSX berhasil diunduh.");
   };
-
-  console.log("[DEBUG] Current viewMode for rendering:", viewMode);
-  console.log("[DEBUG] Current processedRangeSchedules length for rendering:", processedRangeSchedules.length);
 
   return (
     <div className="space-y-6">
@@ -780,12 +795,7 @@ const SatpamSchedule: React.FC = () => {
                   <Calendar
                     mode="single"
                     selected={selectedDate}
-                    onSelect={(date) => {
-                      setSelectedDate(date);
-                      setStartDate(undefined); // Clear range dates
-                      setEndDate(undefined);   // Clear range dates
-                      setViewMode('singleDay'); // Explicitly set to singleDay mode
-                    }}
+                    onSelect={setSelectedDate}
                     initialFocus
                   />
                 </PopoverContent>
@@ -862,6 +872,7 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* New Card for Date Range Schedule View */}
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Lihat Jadwal Berdasarkan Rentang Tanggal</CardTitle>
@@ -925,116 +936,111 @@ const SatpamSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {viewMode === 'range' ? (
+      {processedRangeSchedules.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Jadwal dalam Rentang Tanggal</CardTitle>
           </CardHeader>
           <CardContent>
-            {processedRangeSchedules.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Personel</TableHead>
-                    <TableHead>No. ID</TableHead>
-                    <TableHead>Lokasi</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Personel</TableHead>
+                  <TableHead>No. ID</TableHead>
+                  <TableHead>Lokasi</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {processedRangeSchedules.map((schedule) => (
+                  <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
+                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
+                    <TableCell>{schedule.profileName}</TableCell>
+                    <TableCell>{schedule.idNumber}</TableCell>
+                    <TableCell>{schedule.locationDisplay}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditScheduleAssignmentClick(dailySchedulesSummary.find(s => s.user_id === schedule.user_id && s.schedule_date === schedule.schedule_date)!)}
+                          disabled={loading}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {processedRangeSchedules.map((schedule) => (
-                    <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
-                      <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                      <TableCell>{schedule.profileName}</TableCell>
-                      <TableCell>{schedule.idNumber}</TableCell>
-                      <TableCell>{schedule.locationDisplay}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditScheduleAssignmentClick(schedule)}
-                            disabled={loading}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-center text-gray-600 dark:text-gray-400">
-                Tidak ada jadwal yang ditemukan untuk rentang tanggal yang dipilih.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {dailySchedulesSummary.length === 0 ? (
-              <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Personel</TableHead>
-                    <TableHead>No. ID</TableHead>
-                    <TableHead>Lokasi</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dailySchedulesSummary.map((schedule) => (
-                    <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
-                      <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                      <TableCell>{schedule.profileName}</TableCell>
-                      <TableCell>{schedule.idNumber}</TableCell>
-                      <TableCell>{schedule.locationDisplay}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditScheduleAssignmentClick(schedule)}
-                            disabled={loading}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dailySchedulesSummary.length === 0 ? (
+            <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Personel</TableHead>
+                  <TableHead>No. ID</TableHead>
+                  <TableHead>Lokasi</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailySchedulesSummary.map((schedule) => (
+                  <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
+                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
+                    <TableCell>{schedule.profileName}</TableCell>
+                    <TableCell>{schedule.idNumber}</TableCell>
+                    <TableCell>{schedule.locationDisplay}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditScheduleAssignmentClick(schedule)}
+                          disabled={loading}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Reassign Personel Dialog */}
       <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
