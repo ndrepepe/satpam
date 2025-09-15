@@ -150,8 +150,8 @@ const CheckAreaReport = () => {
       const arrayBuffer = await photoFile.arrayBuffer();
       const photoDataArray = Array.from(new Uint8Array(arrayBuffer));
 
-      // Invoke Edge Function to upload to DomaiNesia
-      const { data, error } = await supabase.functions.invoke('upload-to-domainesia', {
+      // Invoke Edge Function to upload photo to Supabase Storage
+      const { data, error } = await supabase.functions.invoke('upload-photo', { // Mengganti nama fungsi
         body: {
           userId: user.id,
           locationId: locationId,
@@ -161,7 +161,7 @@ const CheckAreaReport = () => {
       });
 
       if (error) {
-        console.error("Error invoking upload-to-domainesia Edge Function:", error);
+        console.error("Error invoking upload-photo Edge Function:", error);
         throw new Error(`Edge Function error: ${error.message}`);
       }
 
@@ -170,7 +170,7 @@ const CheckAreaReport = () => {
       }
 
       if (!data?.publicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto dari DomaiNesia.");
+        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
       }
 
       // Simpan report ke database Supabase
@@ -186,7 +186,7 @@ const CheckAreaReport = () => {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di DomaiNesia Object Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Supabase Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
