@@ -1,0 +1,15 @@
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "AllowedOrigins": [
+      "http://localhost:8080",
+      "http://localhost:5173",
+      "https://your-app-domain.com",
+      "https://www.your-app-domain.com"
+      // Tambahkan semua domain tempat aplikasi Anda akan diakses
+    ],
+    "ExposeHeaders": [],
+    "MaxAgeSeconds": 3000
+  }
+]
