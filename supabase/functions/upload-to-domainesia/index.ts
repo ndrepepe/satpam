@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { encode } from "https://deno.land/std@0.190.0/encoding/hex.ts"; // Mengubah import encodeHex menjadi encode
+import { encode } from "https://deno.land/std@0.190.0/encoding/hex.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,10 +11,10 @@ async function sha256(data: Uint8Array | string): Promise<string> {
   const textEncoder = new TextEncoder();
   const dataBuffer = typeof data === 'string' ? textEncoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", dataBuffer);
-  return encode(new Uint8Array(hash)); // Menggunakan encode
+  return encode(new Uint8Array(hash));
 }
 
-// Helper function for HMAC-SHA256 (implemented internally)
+// Helper function for HMAC-SHA256
 async function hmacSha256(key: string | Uint8Array, msg: string | Uint8Array): Promise<Uint8Array> {
   const textEncoder = new TextEncoder();
   const keyBuffer = typeof key === 'string' ? textEncoder.encode(key) : key;
@@ -41,12 +41,13 @@ async function hmacSha256(key: string | Uint8Array, msg: string | Uint8Array): P
 async function getSignedHeaders(
   accessKey: string,
   secretKey: string,
-  region: string, // For R2, often 'auto' or a specific region if configured
-  service: string, // 's3' for R2 compatibility
+  region: string,
+  service: string,
   method: string,
   path: string,
   headers: Headers,
-  payload: Uint8Array
+  payload: Uint8Array,
+  host: string // Explicitly pass host for custom endpoints
 ): Promise<Headers> {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -54,7 +55,7 @@ async function getSignedHeaders(
 
   headers.set('x-amz-date', amzDate);
   headers.set('x-amz-content-sha256', await sha256(payload));
-  headers.set('host', headers.get('host') || ''); // Ensure host is set
+  headers.set('host', host); // Use the provided host
 
   const canonicalHeaders = Array.from(headers.entries())
     .filter(([key]) => key.startsWith('x-amz-') || key === 'host' || key === 'content-type')
@@ -92,7 +93,7 @@ async function getSignedHeaders(
   const kService = await hmacSha256(kRegion, service);
   const kSigning = await hmacSha256(kService, 'aws4_request');
 
-  const signature = encode(await hmacSha256(kSigning, stringToSign)); // Menggunakan encode
+  const signature = encode(await hmacSha256(kSigning, stringToSign));
 
   headers.set(
     'Authorization',
@@ -108,42 +109,47 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, locationName, photoData, contentType } = await req.json();
-    if (!userId || !locationName || !photoData || !contentType) {
-      throw new Error('Missing required fields');
+    const { userId, locationId, photoData, contentType } = await req.json();
+    if (!userId || !locationId || !photoData || !contentType) {
+      throw new Error('Missing required fields: userId, locationId, photoData, or contentType');
     }
 
-    const R2_ACCOUNT_ID = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
-    const R2_ACCESS_KEY = Deno.env.get('R2_ACCESS_KEY_ID');
-    const R2_SECRET = Deno.env.get('R2_SECRET_ACCESS_KEY');
-    const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME') || 'your-bucket-name'; // Tambahkan nama bucket R2 Anda di sini atau sebagai env var
-    const R2_REGION = Deno.env.get('R2_REGION') || 'auto'; // R2 region, 'auto' is common
+    const DOMAINESIA_ACCESS_KEY = Deno.env.get('DOMAINESIA_ACCESS_KEY');
+    const DOMAINESIA_SECRET_KEY = Deno.env.get('DOMAINESIA_SECRET_KEY');
+    const DOMAINESIA_ENDPOINT = Deno.env.get('DOMAINESIA_ENDPOINT');
+    const DOMAINESIA_BUCKET_NAME = Deno.env.get('DOMAINESIA_BUCKET_NAME');
+    const DOMAINESIA_REGION = Deno.env.get('DOMAINESIA_REGION') || 'us-east-1'; // Default region if not set
 
-    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY || !R2_SECRET) {
-      throw new Error('R2 credentials not configured');
+    if (!DOMAINESIA_ACCESS_KEY || !DOMAINESIA_SECRET_KEY || !DOMAINESIA_ENDPOINT || !DOMAINESIA_BUCKET_NAME) {
+      throw new Error('DomaiNesia credentials or configuration not set in Supabase Secrets.');
     }
 
     const bytes = new Uint8Array(photoData);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileExt = contentType.split('/')[1] || 'jpg';
-    const filename = `uploads/${userId}/${timestamp}.${fileExt}`;
-    const objectPath = `/${filename}`; // Path for R2 object
+    const fileExt = contentType.split('/')[1] || 'jpeg';
+    const filename = `uploads/${userId}/${locationId}-${timestamp}.${fileExt}`;
+    const objectPath = `/${filename}`;
 
-    const url = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}${objectPath}`;
+    // Extract host from the endpoint URL
+    const endpointUrl = new URL(DOMAINESIA_ENDPOINT);
+    const host = endpointUrl.host;
+
+    const url = `${DOMAINESIA_ENDPOINT}/${DOMAINESIA_BUCKET_NAME}${objectPath}`;
 
     const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', contentType);
-    requestHeaders.set('Host', `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`); // Set host header explicitly
+    requestHeaders.set('x-amz-acl', 'public-read'); // Set ACL for public read access
 
     const signedHeaders = await getSignedHeaders(
-      R2_ACCESS_KEY,
-      R2_SECRET,
-      R2_REGION,
-      's3', // R2 is S3 compatible
+      DOMAINESIA_ACCESS_KEY,
+      DOMAINESIA_SECRET_KEY,
+      DOMAINESIA_REGION,
+      's3', // DomaiNesia is S3 compatible
       'PUT',
-      `/${R2_BUCKET_NAME}${objectPath}`, // Path should include bucket name for R2
+      `/${DOMAINESIA_BUCKET_NAME}${objectPath}`, // Path should include bucket name for S3-compatible
       requestHeaders,
-      bytes
+      bytes,
+      host // Pass the extracted host
     );
 
     const response = await fetch(url, {
@@ -154,13 +160,16 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`R2 Upload Error: ${response.status} - ${errorText}`);
+      console.error(`DomaiNesia Upload Error: ${response.status} - ${errorText}`);
       throw new Error(`Upload failed: ${response.status} - ${errorText}`);
     }
 
+    // Construct the public URL. Assuming DomaiNesia public URL structure is similar to endpoint + bucket + path
+    const publicUrl = `${DOMAINESIA_ENDPOINT}/${DOMAINESIA_BUCKET_NAME}${objectPath}`;
+
     return new Response(
       JSON.stringify({
-        r2PublicUrl: `https://pub-${R2_ACCOUNT_ID}.r2.dev/${filename}`
+        publicUrl: publicUrl
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
