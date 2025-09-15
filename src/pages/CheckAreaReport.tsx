@@ -179,11 +179,14 @@ const CheckAreaReport = () => {
       const fileExt = photoFile.type.split('/')[1] || 'jpeg'; // Ensure it's jpeg as we convert to it
       const filePath = `${user.id}/${locationId}-${timestamp}.${fileExt}`; // Path in DomaiNesia Object Storage
 
+      // Convert Blob to ArrayBuffer
+      const arrayBuffer = await photoFile.arrayBuffer();
+
       // Upload to DomaiNesia Object Storage
       const uploadCommand = new PutObjectCommand({
         Bucket: DOMAINESIA_BUCKET_NAME,
         Key: filePath,
-        Body: photoFile,
+        Body: new Uint8Array(arrayBuffer), // Pass ArrayBuffer wrapped in Uint8Array
         ContentType: photoFile.type,
         ACL: 'public-read' // Mengizinkan akses publik ke file
       });
