@@ -66,6 +66,55 @@ const CheckAreaReport = () => {
     fileInputRef.current?.click();
   };
 
+  // Fungsi untuk mengompres gambar
+  const compressImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Sesuaikan ukuran jika melebihi maxWidth atau maxHeight
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return reject(new Error("Could not get canvas context"));
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Canvas toBlob failed"));
+            }
+          }, file.type, quality); // Gunakan tipe file asli dan kualitas yang ditentukan
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleSubmitReport = async () => {
     if (!user || !locationId || !photoFile || !locationName) {
       toast.error("Data laporan tidak lengkap. Pastikan Anda sudah mengambil foto dan lokasi terdeteksi.");
@@ -75,14 +124,21 @@ const CheckAreaReport = () => {
     setLoading(true);
 
     try {
-      // Baca file sebagai ArrayBuffer
-      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as ArrayBuffer);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(photoFile);
-      });
+      // Kompres gambar sebelum diunggah
+      const compressedBlob = await compressImage(photoFile, 1024, 1024, 0.8); // Max 1024px, kualitas 80%
+      
+      // Jika ukuran file masih terlalu besar, coba kompres lagi dengan kualitas lebih rendah
+      let finalBlob = compressedBlob;
+      let currentQuality = 0.8;
+      const MAX_FILE_SIZE_BYTES = 200 * 1024; // 200 KB
 
+      while (finalBlob.size > MAX_FILE_SIZE_BYTES && currentQuality > 0.1) {
+        currentQuality -= 0.1;
+        finalBlob = await compressImage(photoFile, 1024, 1024, currentQuality);
+      }
+
+      // Konversi Blob ke ArrayBuffer
+      const arrayBuffer = await finalBlob.arrayBuffer();
       // Konversi ke array number untuk JSON
       const photoData = Array.from(new Uint8Array(arrayBuffer));
 
@@ -90,9 +146,9 @@ const CheckAreaReport = () => {
       const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
         body: {
           userId: user.id,
-          locationId: locationId, // Mengirim locationId, bukan locationName
+          locationId: locationId,
           photoData: photoData,
-          contentType: photoFile.type
+          contentType: finalBlob.type // Gunakan tipe konten dari blob yang sudah dikompres
         },
       });
 
@@ -100,7 +156,7 @@ const CheckAreaReport = () => {
         throw error;
       }
 
-      if (!data?.publicUrl) { // Menggunakan publicUrl sesuai respons Edge Function
+      if (!data?.publicUrl) {
         throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
       }
 
@@ -110,7 +166,7 @@ const CheckAreaReport = () => {
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: data.publicUrl, // Menggunakan publicUrl
+          photo_url: data.publicUrl,
         });
 
       if (insertError) {
