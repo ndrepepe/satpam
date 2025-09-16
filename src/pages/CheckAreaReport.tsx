@@ -86,11 +86,11 @@ const CheckAreaReport = () => {
       // Konversi ke array number untuk JSON
       const photoData = Array.from(new Uint8Array(arrayBuffer));
 
-      // Panggil Edge Function
-      const { data, error } = await supabase.functions.invoke('upload-to-r2', {
+      // Panggil Edge Function yang benar
+      const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
         body: {
           userId: user.id,
-          locationName: locationName,
+          locationId: locationId, // Mengirim locationId, bukan locationName
           photoData: photoData,
           contentType: photoFile.type
         },
@@ -100,8 +100,8 @@ const CheckAreaReport = () => {
         throw error;
       }
 
-      if (!data?.r2PublicUrl) {
-        throw new Error("Gagal mendapatkan URL publik foto dari R2.");
+      if (!data?.publicUrl) { // Menggunakan publicUrl sesuai respons Edge Function
+        throw new Error("Gagal mendapatkan URL publik foto dari Supabase Storage.");
       }
 
       // Simpan report ke database
@@ -110,14 +110,14 @@ const CheckAreaReport = () => {
         .insert({
           user_id: user.id,
           location_id: locationId,
-          photo_url: data.r2PublicUrl,
+          photo_url: data.publicUrl, // Menggunakan publicUrl
         });
 
       if (insertError) {
         throw insertError;
       }
 
-      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di R2 Storage!");
+      toast.success("Laporan cek area berhasil dikirim dan foto disimpan di Supabase Storage!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal mengirim laporan: ${error.message}`);
