@@ -1,25 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-// const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY; // Hapus ini dari client-side
+const SUPABASE_URL = "https://gxbzdhrhlhrjdgzcfzbw.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4YnpkaHJobGhyamRnemNmemJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MzM2OTgsImV4cCI6MjA5NDIwOTY5OH0.O-bZUcNF_RFTGwrt9HkciQdcZ0LN7NB3j0nE2eOI3tQ";
 
-if (!supabaseUrl) {
-  throw new Error('Missing VITE_SUPABASE_URL environment variable.');
-}
-if (!supabaseAnonKey) {
-  throw new Error('Missing VITE_SUPABASE_ANON_KEY environment variable.');
-}
-// if (!supabaseServiceRoleKey) { // Hapus ini dari client-side
-//   throw new Error('Missing VITE_SUPABASE_SERVICE_ROLE_KEY environment variable.');
-// }
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Hapus ekspor supabaseAdmin dari client-side karena tidak aman
-// export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-//   auth: {
-//     autoRefreshToken: false,
-//     persistSession: false,
-//   },
-// });
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
