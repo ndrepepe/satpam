@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client'; // Hanya import supabase, bukan supabaseAdmin
+import { supabase } from '@/integrations/supabase/client';
 
 const editPersonnelSchema = z.object({
   first_name: z.string().min(1, "Nama depan wajib diisi"),
@@ -45,17 +45,9 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
   }, [personnel, form]);
 
   const onSubmit = async (values: EditPersonnelFormValues) => {
-    if (!personnel) {
-      console.error("No personnel selected for update.");
-      toast.error("Tidak ada personel yang dipilih untuk diperbarui.");
-      return;
-    }
-
-    console.log("Attempting to update personnel with ID:", personnel.id);
-    console.log("New values to send:", values);
+    if (!personnel) return;
 
     try {
-      // 1. Update public.profiles table
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -65,13 +57,9 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
         })
         .eq('id', personnel.id);
 
-      if (profileError) {
-        console.error("Supabase profile update error:", profileError);
-        throw profileError;
-      }
+      if (profileError) throw profileError;
 
-      // 2. Invoke Edge Function to update auth.users metadata securely
-      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('update-user-metadata', {
+      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/update-user-metadata', {
         body: {
           userId: personnel.id,
           firstName: values.first_name,
@@ -80,23 +68,19 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
       });
 
       if (edgeFunctionError) {
-        console.error("Edge Function invocation error:", edgeFunctionError);
         throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
       }
       
       if (edgeFunctionData && edgeFunctionData.error) {
-        console.error("Edge Function returned an error:", edgeFunctionData.error);
         throw new Error(`Edge Function returned error: ${edgeFunctionData.error}`);
       }
 
-      console.log("Supabase update successful (no error returned).");
       toast.success(`Profil ${values.first_name} ${values.last_name} berhasil diperbarui.`);
-      onPersonnelUpdated(); // Panggil callback untuk refresh daftar
-      console.log("onPersonnelUpdated called.");
-      onClose(); // Tutup modal
+      onPersonnelUpdated();
+      onClose();
     } catch (error: any) {
       toast.error(`Gagal memperbarui profil: ${error.message}`);
-      console.error("Error updating personnel profile (catch block):", error);
+      console.error("Error updating personnel profile:", error);
     }
   };
 

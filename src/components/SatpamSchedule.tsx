@@ -79,7 +79,6 @@ const SatpamSchedule: React.FC = () => {
   const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung');
   const [loading, setLoading] = useState(true);
 
-  // State for Reassign Dialog
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [originalUserId, setOriginalUserId] = useState<string | null>(null);
   const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
@@ -87,20 +86,9 @@ const SatpamSchedule: React.FC = () => {
   const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
   const [newSelectedBuildingPosition, setNewSelectedBuildingPosition] = useState<string | undefined>(undefined);
 
-  // New states for date range filtering
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [rangeSchedules, setRangeSchedules] = useState<ScheduleEntry[]>([]);
-
-
-  // Maps for quick lookup during XLSX processing
-  const satpamNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    satpamList.forEach(s => {
-      map.set(`${s.first_name} ${s.last_name}`.trim(), s.id);
-    });
-    return map;
-  }, [satpamList]);
 
   const idNumberToUserIdMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -170,11 +158,6 @@ const SatpamSchedule: React.FC = () => {
       toast.error("Harap pilih tanggal mulai dan tanggal akhir.");
       return;
     }
-    if (startDate > endDate) {
-      toast.error("Tanggal mulai tidak boleh lebih lambat dari tanggal akhir.");
-      return;
-    }
-
     setLoading(true);
     try {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
@@ -195,20 +178,9 @@ const SatpamSchedule: React.FC = () => {
         .order('schedule_date', { ascending: true }); 
 
       if (error) throw error;
-      
-      const typedData = data as unknown as ScheduleEntry[];
-      // Lakukan pengurutan tambahan di sisi klien berdasarkan nama personel
-      const sortedData = typedData.sort((a, b) => {
-        const nameA = a.profiles?.first_name || '';
-        const nameB = b.profiles?.first_name || '';
-        return nameA.localeCompare(nameB);
-      });
-
-      setRangeSchedules(sortedData);
-      toast.success(`Jadwal untuk rentang ${format(startDate, 'dd MMM', { locale: idLocale })} - ${format(endDate, 'dd MMM yyyy', { locale: idLocale })} berhasil dimuat.`);
+      setRangeSchedules(data as unknown as ScheduleEntry[]);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
-      console.error("Error fetching range schedules:", error);
     } finally {
       setLoading(false);
     }
@@ -221,21 +193,11 @@ const SatpamSchedule: React.FC = () => {
   useEffect(() => {
     if (selectedDate) {
       fetchSchedules(selectedDate);
-    } else {
-      setSchedules([]);
     }
   }, [selectedDate]);
 
   const dailySchedulesSummary = useMemo(() => {
-    const grouped = new Map<string, {
-      user_id: string;
-      schedule_date: string;
-      profileName: string;
-      idNumber?: string;
-      assignedLocationIds: Set<string>;
-      assignedBuildingPositions: Set<string>;
-    }>();
-
+    const grouped = new Map<string, DailyScheduleSummaryEntry>();
     schedules.forEach(schedule => {
       const key = `${schedule.user_id}-${schedule.schedule_date}`;
       if (!grouped.has(key)) {
@@ -244,327 +206,94 @@ const SatpamSchedule: React.FC = () => {
           schedule_date: schedule.schedule_date,
           profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
           idNumber: schedule.profiles?.id_number || 'N/A',
+          locationDisplay: '',
           assignedLocationIds: new Set(),
-          assignedBuildingPositions: new Set(),
         });
       }
-      const entry = grouped.get(key)!;
-      entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.posisi_gedung) {
-        entry.assignedBuildingPositions.add(schedule.locations.posisi_gedung);
-      }
+      grouped.get(key)!.assignedLocationIds.add(schedule.location_id);
     });
 
-    const result: DailyScheduleSummaryEntry[] = [];
-    grouped.forEach(entry => {
-      let locationDisplay: string;
-      const allLocationsCount = locationList.length;
-      const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
-      const gedungTimurLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur');
+    return Array.from(grouped.values()).map(entry => {
+      const gedungBaratCount = locationList.filter(l => l.posisi_gedung === 'Gedung Barat').length;
+      const gedungTimurCount = locationList.filter(l => l.posisi_gedung === 'Gedung Timur').length;
+      const assignedCount = entry.assignedLocationIds.size;
 
-      const assignedToGedungBarat = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungBaratLocations.some(gbLoc => gbLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungBaratLocations.length;
+      if (assignedCount === locationList.length) entry.locationDisplay = "Semua Gedung";
+      else if (assignedCount === gedungBaratCount) entry.locationDisplay = "Gedung Barat";
+      else if (assignedCount === gedungTimurCount) entry.locationDisplay = "Gedung Timur";
+      else entry.locationDisplay = "Beberapa Lokasi";
 
-      const assignedToGedungTimur = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungTimurLocations.some(gtLoc => gtLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungTimurLocations.length;
-
-      if (entry.assignedLocationIds.size === allLocationsCount) {
-        locationDisplay = "Semua Lokasi";
-      } else if (assignedToGedungBarat && !assignedToGedungTimur) {
-        locationDisplay = "Gedung Barat";
-      } else if (assignedToGedungTimur && !assignedToGedungBarat) {
-        locationDisplay = "Gedung Timur";
-      } else {
-        locationDisplay = "Beberapa Lokasi"; // Mixed or partial assignment
-      }
-
-      result.push({
-        schedule_date: entry.schedule_date,
-        user_id: entry.user_id,
-        profileName: entry.profileName,
-        idNumber: entry.idNumber,
-        locationDisplay: locationDisplay,
-        assignedLocationIds: entry.assignedLocationIds, // Keep for edit logic
-      });
+      return entry;
     });
-    return Array.from(result.values());
   }, [schedules, locationList]);
 
-  // New useMemo for summarizing range schedules
   const processedRangeSchedules = useMemo(() => {
-    const grouped = new Map<string, {
-      user_id: string;
-      schedule_date: string;
-      profileName: string;
-      idNumber?: string;
-      assignedLocationIds: Set<string>;
-      locations: string[]; // To store names of assigned locations if not 'All'
-    }>();
-
+    const grouped = new Map<string, SummarizedRangeScheduleEntry>();
     rangeSchedules.forEach(schedule => {
       const key = `${schedule.schedule_date}-${schedule.user_id}`;
       if (!grouped.has(key)) {
         grouped.set(key, {
-          user_id: schedule.user_id,
           schedule_date: schedule.schedule_date,
+          user_id: schedule.user_id,
           profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
           idNumber: schedule.profiles?.id_number || 'N/A',
-          assignedLocationIds: new Set(),
-          locations: []
+          locationDisplay: 'Ditugaskan',
         });
       }
-      const entry = grouped.get(key)!;
-      entry.assignedLocationIds.add(schedule.location_id);
-      if (schedule.locations?.name) {
-        entry.locations.push(schedule.locations.name);
-      }
     });
-
-    const result: SummarizedRangeScheduleEntry[] = [];
-    grouped.forEach(entry => {
-      let locationDisplay: string;
-      if (locationList.length > 0 && entry.assignedLocationIds.size === locationList.length) {
-        locationDisplay = "Semua Lokasi";
-      } else if (entry.assignedLocationIds.size === 1) {
-        locationDisplay = entry.locations[0] || 'N/A'; 
-      } else if (entry.assignedLocationIds.size > 1) {
-        locationDisplay = "Beberapa Lokasi"; 
-      } else {
-        locationDisplay = 'N/A';
-      }
-
-      result.push({
-        schedule_date: entry.schedule_date,
-        user_id: entry.user_id,
-        profileName: entry.profileName,
-        idNumber: entry.idNumber,
-        locationDisplay: locationDisplay
-      });
-    });
-
-    // Sort the summarized results
-    result.sort((a, b) => {
-      const dateComparison = new Date(a.schedule_date).getTime() - new Date(b.schedule_date).getTime();
-      if (dateComparison !== 0) return dateComparison;
-      return a.profileName.localeCompare(b.profileName);
-    });
-
-    return result;
-  }, [rangeSchedules, locationList]);
-
+    return Array.from(grouped.values());
+  }, [rangeSchedules]);
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId || !selectedBuildingPosition) {
-      toast.error("Harap lengkapi semua bidang: Tanggal, Personel, dan Posisi Gedung.");
+      toast.error("Harap lengkapi semua bidang.");
       return;
     }
     
-    let locationsToAssign: Location[] = [];
-    if (selectedBuildingPosition === 'Semua Gedung') {
-      locationsToAssign = locationList;
-    } else {
-      locationsToAssign = locationList.filter(loc => loc.posisi_gedung === selectedBuildingPosition);
-    }
-
-    if (locationsToAssign.length === 0) {
-      toast.error(`Tidak ada lokasi yang terdaftar untuk ${selectedBuildingPosition}.`);
-      return;
-    }
+    let locationsToAssign = selectedBuildingPosition === 'Semua Gedung' 
+      ? locationList 
+      : locationList.filter(loc => loc.posisi_gedung === selectedBuildingPosition);
 
     setLoading(true);
     try {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
-      // Check if the selected satpam is already scheduled for this date
-      const { data: existingSchedules, error: existingSchedulesError } = await supabase
-        .from('schedules')
-        .select('id')
-        .eq('user_id', selectedSatpamId)
-        .eq('schedule_date', formattedDate);
+      const schedulesToInsert = locationsToAssign.map(loc => ({
+        schedule_date: formattedDate,
+        user_id: selectedSatpamId,
+        location_id: loc.id,
+      }));
 
-      if (existingSchedulesError) throw existingSchedulesError;
-
-      if (existingSchedules && existingSchedules.length > 0) {
-        toast.error("Personel ini sudah memiliki jadwal tugas di tanggal yang sama.");
-        setLoading(false);
-        return;
-      }
-
-      const schedulesToInsert = [];
-      for (const location of locationsToAssign) {
-        schedulesToInsert.push({
-          schedule_date: formattedDate,
-          user_id: selectedSatpamId,
-          location_id: location.id,
-        });
-      }
-
-      const { error } = await supabase
-        .from('schedules')
-        .insert(schedulesToInsert);
-
+      const { error } = await supabase.from('schedules').insert(schedulesToInsert);
       if (error) throw error;
 
-      toast.success(`Jadwal berhasil ditambahkan untuk ${selectedBuildingPosition}!`);
-      setSelectedSatpamId(undefined);
-      setSelectedBuildingPosition('Semua Gedung'); // Reset building position
-      if (selectedDate) {
-        fetchSchedules(selectedDate);
-      }
+      toast.success("Jadwal berhasil ditambahkan!");
+      fetchSchedules(selectedDate);
     } catch (error: any) {
-      toast.error(`Gagal menambahkan jadwal: ${error.message}`);
-      console.error("Error saving schedule:", error);
+      toast.error(`Gagal: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteGroupedSchedule = async (userId: string, scheduleDate: string) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus semua jadwal untuk personel ini pada tanggal ${format(new Date(scheduleDate), 'dd MMMM yyyy', { locale: idLocale })}?`)) {
+    if (window.confirm("Hapus jadwal ini?")) {
       setLoading(true);
       try {
-        const { error } = await supabase
-          .from('schedules')
-          .delete()
-          .eq('user_id', userId)
-          .eq('schedule_date', scheduleDate);
-
+        const { error } = await supabase.from('schedules').delete().eq('user_id', userId).eq('schedule_date', scheduleDate);
         if (error) throw error;
-
-        toast.success("Semua jadwal terkait berhasil dihapus.");
-        if (selectedDate) {
-          fetchSchedules(selectedDate);
-        }
-        // Also refresh range schedules if they are currently displayed
-        if (startDate && endDate) {
-          fetchRangeSchedules();
-        }
+        toast.success("Jadwal dihapus.");
+        if (selectedDate) fetchSchedules(selectedDate);
       } catch (error: any) {
-        toast.error(`Gagal menghapus jadwal: ${error.message}`);
-        console.error("Error deleting grouped schedule:", error);
+        toast.error(error.message);
       } finally {
         setLoading(false);
       }
     }
   };
 
-  const handleEditScheduleAssignmentClick = (scheduleSummary: DailyScheduleSummaryEntry) => {
-    setOriginalUserId(scheduleSummary.user_id);
-    setOriginalScheduleDate(scheduleSummary.schedule_date);
-    setOriginalLocationAssignmentType(scheduleSummary.locationDisplay);
-    setNewSelectedSatpamId(scheduleSummary.user_id);
-    setNewSelectedBuildingPosition(scheduleSummary.locationDisplay === "Beberapa Lokasi" ? "Semua Gedung" : scheduleSummary.locationDisplay);
-    setIsReassignDialogOpen(true);
-  };
-
-  const handleSaveScheduleAssignment = async () => {
-    if (!originalUserId || !originalScheduleDate || !newSelectedSatpamId || !newSelectedBuildingPosition) {
-      toast.error("Data tidak lengkap untuk mengubah penugasan.");
-      return;
-    }
-
-    // Check if both satpam and building position are unchanged
-    const isSatpamUnchanged = originalUserId === newSelectedSatpamId;
-    const isBuildingPositionUnchanged = originalLocationAssignmentType === newSelectedBuildingPosition;
-
-    if (isSatpamUnchanged && isBuildingPositionUnchanged) {
-      toast.info("Tidak ada perubahan yang disimpan.");
-      setIsReassignDialogOpen(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const formattedDate = originalScheduleDate;
-
-      // If changing satpam, check if the new satpam is already assigned on this date
-      if (!isSatpamUnchanged) {
-        const { data: existingAssignment, error: existingAssignmentError } = await supabase
-          .from('schedules')
-          .select('id')
-          .eq('user_id', newSelectedSatpamId)
-          .eq('schedule_date', formattedDate)
-          .limit(1);
-
-        if (existingAssignmentError) throw existingAssignmentError;
-
-        if (existingAssignment && existingAssignment.length > 0) {
-          const newSatpamName = satpamList.find(s => s.id === newSelectedSatpamId)?.first_name || 'Personel ini';
-          toast.error(`${newSatpamName} sudah memiliki jadwal tugas di tanggal ${format(new Date(formattedDate), 'dd MMMM yyyy', { locale: idLocale })}.`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 1. Delete all existing schedule entries for the original user on the original date
-      const { error: deleteError } = await supabase
-        .from('schedules')
-        .delete()
-        .eq('user_id', originalUserId)
-        .eq('schedule_date', formattedDate);
-
-      if (deleteError) throw deleteError;
-
-      // 2. Determine locations to insert based on the new selected building position
-      let locationsToInsert: Location[] = [];
-      if (newSelectedBuildingPosition === 'Semua Gedung') {
-        locationsToInsert = locationList;
-      } else {
-        locationsToInsert = locationList.filter(loc => loc.posisi_gedung === newSelectedBuildingPosition);
-      }
-
-      if (locationsToInsert.length === 0) {
-        toast.error(`Tidak ada lokasi yang terdaftar untuk ${newSelectedBuildingPosition}.`);
-        setLoading(false);
-        return;
-      }
-
-      // 3. Insert new schedule entries for the new user and new building position
-      const schedulesToInsert = [];
-      for (const location of locationsToInsert) {
-        schedulesToInsert.push({
-          schedule_date: formattedDate,
-          user_id: newSelectedSatpamId,
-          location_id: location.id,
-        });
-      }
-
-      const { error: insertError } = await supabase
-        .from('schedules')
-        .insert(schedulesToInsert);
-
-      if (insertError) throw insertError;
-
-      toast.success("Penugasan jadwal berhasil diperbarui.");
-      setIsReassignDialogOpen(false);
-      setOriginalUserId(null);
-      setOriginalScheduleDate(null);
-      setOriginalLocationAssignmentType(undefined);
-      setNewSelectedSatpamId(undefined);
-      setNewSelectedBuildingPosition(undefined);
-      
-      if (selectedDate) {
-        await fetchSchedules(selectedDate);
-      }
-      if (startDate && endDate) {
-        fetchRangeSchedules();
-      }
-    } catch (error: any) {
-      toast.error(`Gagal memperbarui penugasan jadwal: ${error.message}`);
-      console.error("Error updating schedule assignment:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      toast.error("Tidak ada file yang dipilih.");
-      return;
-    }
+    if (!file) return;
 
     setLoading(true);
     const reader = new FileReader();
@@ -572,524 +301,101 @@ const SatpamSchedule: React.FC = () => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName]; // Corrected: Access Sheets from workbook
-        
-        // Read data as array of arrays to get headers and rows
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-        if (rawData.length === 0) {
-          toast.error("File XLSX kosong atau tidak memiliki data.");
-          setLoading(false);
-          return;
-        }
-
+        
         const headers = rawData[0];
-        const dataRows = rawData.slice(1);
-
         const nameColIndex = headers.indexOf('Nama');
         const idColIndex = headers.indexOf('No ID');
-        // 'Posisi Gedung' is no longer a fixed column, its value is per date cell
+        const dateColumns = headers.map((h, i) => ({ header: h, index: i })).filter(h => !isNaN(new Date(h.header).getTime()));
 
-        if (nameColIndex === -1 || idColIndex === -1) {
-          toast.error("File XLSX harus memiliki kolom 'Nama' dan 'No ID'.");
-          setLoading(false);
-          return;
-        }
-
-        const dateColumns: { header: string; index: number }[] = [];
-        for (let i = 0; i < headers.length; i++) {
-          // Only consider columns that are not 'Nama' or 'No ID' as potential date columns
-          if (i !== nameColIndex && i !== idColIndex) {
-            try {
-              // Attempt to parse header as a date (YYYY-MM-DD)
-              const parsedDate = new Date(headers[i]);
-              if (!isNaN(parsedDate.getTime())) { // Check if it's a valid date
-                dateColumns.push({ header: format(parsedDate, 'yyyy-MM-dd'), index: i });
-              }
-            } catch (e) {
-              // Not a date column, ignore
-            }
-          }
-        }
-
-        if (dateColumns.length === 0) {
-          toast.error("File XLSX tidak memiliki kolom tanggal yang valid (misal: YYYY-MM-DD).");
-          setLoading(false);
-          return;
-        }
-
-        const schedulesToProcess: { date: string; userId: string; buildingPosition: string }[] = [];
-        let hasError = false;
-
-        for (const row of dataRows) {
-          const satpamName = row[nameColIndex]?.toString().trim();
-          const satpamIdNumber = row[idColIndex]?.toString().trim();
-
-          if (!satpamName || !satpamIdNumber) {
-            console.warn("Skipping row due to missing Nama or No ID:", row);
-            toast.error(`Baris dilewati karena data tidak lengkap (Nama atau No ID kosong): ${row.join(', ')}`);
-            hasError = true;
-            break;
-          }
-
-          const userId = idNumberToUserIdMap.get(satpamIdNumber);
-
-          if (!userId) {
-            toast.error(`Personel dengan No ID "${satpamIdNumber}" tidak ditemukan di daftar satpam.`);
-            hasError = true;
-            break;
-          }
+        const schedulesToProcess = [];
+        for (const row of rawData.slice(1)) {
+          const userId = idNumberToUserIdMap.get(row[idColIndex]?.toString().trim());
+          if (!userId) continue;
 
           for (const dateCol of dateColumns) {
-            const cellValue = row[dateCol.index]?.toString().trim();
-            
-            if (cellValue) { // If cell has any value, it's a building position
-              const buildingPosition = cellValue;
-              if (!['Semua Gedung', 'Gedung Barat', 'Gedung Timur'].includes(buildingPosition)) {
-                toast.error(`Posisi Gedung "${buildingPosition}" pada tanggal ${dateCol.header} untuk ${satpamName} tidak valid. Harap gunakan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur'.`);
-                hasError = true;
-                break;
-              }
-              schedulesToProcess.push({ date: dateCol.header, userId: userId, buildingPosition: buildingPosition });
-            }
+            const pos = row[dateCol.index]?.toString().trim();
+            if (pos) schedulesToProcess.push({ date: dateCol.header, userId, buildingPosition: pos });
           }
-          if (hasError) break;
         }
 
-        if (hasError) {
-          setLoading(false);
-          return;
-        }
-
-        if (schedulesToProcess.length === 0) {
-          toast.info("Tidak ada jadwal yang ditemukan dalam file yang diunggah.");
-          setLoading(false);
-          return;
-        }
-
-        // Send to Edge Function for bulk insertion
-        const { data: edgeFunctionResponse, error: edgeFunctionError } = await supabase.functions.invoke('bulk-insert-schedules', {
+        const { data: res, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
 
-        if (edgeFunctionError) {
-          console.error("Error invoking bulk-insert-schedules Edge Function:", edgeFunctionError);
-          throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
-        }
-
-        if (edgeFunctionResponse && edgeFunctionResponse.error) {
-          throw new Error(`Edge Function returned error: ${edgeFunctionResponse.error}`);
-        }
-
-        toast.success("Jadwal berhasil diimpor dari file XLSX!");
-        if (selectedDate) {
-          fetchSchedules(selectedDate);
-        }
-        // Also refresh range schedules if they are currently displayed
-        if (startDate && endDate) {
-          fetchRangeSchedules();
-        }
+        if (error || res?.error) throw new Error(error?.message || res?.error);
+        toast.success("Jadwal diimpor!");
+        if (selectedDate) fetchSchedules(selectedDate);
       } catch (error: any) {
-        toast.error(`Gagal memproses file: ${error.message}`);
-        console.error("Error processing XLSX file:", error);
+        toast.error(`Gagal: ${error.message}`);
       } finally {
         setLoading(false);
-        // Clear the file input
-        if (event.target) {
-          event.target.value = '';
-        }
       }
     };
     reader.readAsArrayBuffer(file);
   };
 
-  const handleDownloadTemplate = () => {
-    // New headers: Nama, No ID, then dates
-    const headers = ["Nama", "No ID"]; 
-    const today = new Date();
-    // Add next 30 days as date headers
-    for (let i = 0; i < 30; i++) { 
-      headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
-    }
-
-    const ws_data: (string | null)[][] = [headers];
-
-    // Add some example data rows
-    if (satpamList.length > 0) {
-      const exampleSatpam1 = satpamList[0];
-      const row1: (string | null)[] = [
-        `${exampleSatpam1.first_name} ${exampleSatpam1.last_name}`,
-        exampleSatpam1.id_number || 'ID001',
-      ];
-      // Example assignments for dates
-      for (let i = 0; i < 30; i++) { 
-        if (i === 0) row1.push('Gedung Barat');
-        else if (i === 2) row1.push('Semua Gedung');
-        else row1.push(null);
-      }
-      ws_data.push(row1);
-
-      if (satpamList.length > 1) {
-        const exampleSatpam2 = satpamList[1];
-        const row2: (string | null)[] = [
-          `${exampleSatpam2.first_name} ${exampleSatpam2.last_name}`,
-          exampleSatpam2.id_number || 'ID002',
-        ];
-        for (let i = 0; i < 30; i++) { 
-          if (i === 1) row2.push('Gedung Timur');
-          else if (i === 3) row2.push('Semua Gedung');
-          else row2.push(null);
-        }
-        ws_data.push(row2);
-      }
-    } else {
-      // Fallback if no satpam data
-      const row1: (string | null)[] = ["Budi Santoso", "ID001"];
-      for (let i = 0; i < 30; i++) {
-        if (i === 0) row1.push('Gedung Barat');
-        else if (i === 2) row1.push('Semua Gedung');
-        else row1.push(null);
-      }
-      ws_data.push(row1);
-
-      const row2: (string | null)[] = ["Siti Aminah", "ID002"];
-      for (let i = 0; i < 30; i++) {
-        if (i === 1) row2.push('Gedung Timur');
-        else if (i === 3) row2.push('Semua Gedung');
-        else row2.push(null);
-      }
-      ws_data.push(row2);
-    }
-
-    const ws = XLSX.utils.aoa_to_sheet(ws_data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Jadwal_Template");
-    XLSX.writeFile(wb, "jadwal_template.xlsx");
-    toast.info("Format file XLSX berhasil diunduh.");
-  };
-
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Tambah Jadwal Baru</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Tambah Jadwal Baru</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Tanggal</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Personel Satpam</label>
-              <Select onValueChange={setSelectedSatpamId} value={selectedSatpamId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih Satpam" />
-                </SelectTrigger>
-                <SelectContent>
-                  {satpamList.map((satpam) => (
-                    <SelectItem key={satpam.id} value={satpam.id}>
-                      {satpam.first_name} {satpam.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih Posisi Gedung</label>
-              <Select onValueChange={setSelectedBuildingPosition} value={selectedBuildingPosition}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih Gedung" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
-                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
-                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-start">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : "Pilih tanggal"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} /></PopoverContent>
+            </Popover>
+            <Select onValueChange={setSelectedSatpamId} value={selectedSatpamId}>
+              <SelectTrigger><SelectValue placeholder="Pilih Satpam" /></SelectTrigger>
+              <SelectContent>{satpamList.map(s => <SelectItem key={s.id} value={s.id}>{s.first_name} {s.last_name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select onValueChange={setSelectedBuildingPosition} value={selectedBuildingPosition}>
+              <SelectTrigger><SelectValue placeholder="Pilih Gedung" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
+                <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
+                <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>
-            {loading ? "Menyimpan..." : "Simpan Jadwal"}
-          </Button>
+          <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>Simpan Jadwal</Button>
         </CardContent>
       </Card>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Impor Jadwal dari File XLSX</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Unggah file XLSX Anda. Pastikan file memiliki kolom 'Nama' (nama lengkap personel) dan 'No ID' (nomor ID personel) di awal, diikuti oleh kolom-kolom tanggal (misal: YYYY-MM-DD). Isi sel di bawah kolom tanggal dengan 'Semua Gedung', 'Gedung Barat', atau 'Gedung Timur' untuk menandakan personel bertugas pada lokasi tersebut. Biarkan kosong jika tidak bertugas.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center gap-2">
-            <Input
-              id="xlsx-file-upload"
-              type="file"
-              accept=".xlsx, .xls"
-              onChange={handleFileUpload}
-              className="flex-grow"
-              disabled={loading}
-            />
-            <Button
-              onClick={() => document.getElementById('xlsx-file-upload')?.click()}
-              disabled={loading}
-              className="w-full sm:w-auto"
-            >
-              <Upload className="mr-2 h-4 w-4" /> Unggah & Proses
-            </Button>
-            <Button
-              onClick={handleDownloadTemplate}
-              disabled={loading}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              <Download className="mr-2 h-4 w-4" /> Unduh Format
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* New Card for Date Range Schedule View */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Lihat Jadwal Berdasarkan Rentang Tanggal</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Mulai</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal mulai</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex-1">
-              <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Akhir</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal akhir</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-          <Button onClick={fetchRangeSchedules} className="w-full" disabled={loading || !startDate || !endDate}>
-            {loading ? "Memuat..." : "Tampilkan Jadwal"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {processedRangeSchedules.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Jadwal dalam Rentang Tanggal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Personel</TableHead>
-                  <TableHead>No. ID</TableHead>
-                  <TableHead>Lokasi</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {processedRangeSchedules.map((schedule) => (
-                  <TableRow key={`${schedule.schedule_date}-${schedule.user_id}`}>
-                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>{schedule.locationDisplay}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(dailySchedulesSummary.find(s => s.user_id === schedule.user_id && s.schedule_date === schedule.schedule_date)!)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Jadwal untuk {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : 'Tanggal Dipilih'}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dailySchedulesSummary.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-400">Tidak ada jadwal untuk tanggal ini.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Personel</TableHead>
-                  <TableHead>No. ID</TableHead>
-                  <TableHead>Lokasi</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dailySchedulesSummary.map((schedule) => (
-                  <TableRow key={`${schedule.user_id}-${schedule.schedule_date}`}>
-                    <TableCell>{format(new Date(schedule.schedule_date), 'dd MMMM yyyy', { locale: idLocale })}</TableCell>
-                    <TableCell>{schedule.profileName}</TableCell>
-                    <TableCell>{schedule.idNumber}</TableCell>
-                    <TableCell>{schedule.locationDisplay}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditScheduleAssignmentClick(schedule)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteGroupedSchedule(schedule.user_id, schedule.schedule_date)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+        <CardHeader><CardTitle>Impor XLSX</CardTitle></CardHeader>
+        <CardContent className="flex gap-2">
+          <Input type="file" accept=".xlsx" onChange={handleFileUpload} disabled={loading} />
+          <Button variant="outline" onClick={() => window.location.reload()}><Upload className="mr-2 h-4 w-4" /> Proses</Button>
         </CardContent>
       </Card>
 
-      {/* Reassign Personel Dialog */}
-      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Ubah Penugasan Jadwal</DialogTitle>
-            <DialogDescription>
-              Pilih personel satpam dan/atau posisi gedung baru untuk jadwal ini.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="newSatpam" className="text-right">
-                Personel Baru
-              </Label>
-              <Select onValueChange={setNewSelectedSatpamId} value={newSelectedSatpamId} disabled={loading}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Pilih Satpam Baru" />
-                </SelectTrigger>
-                <SelectContent>
-                  {satpamList.map((satpam) => (
-                    <SelectItem key={satpam.id} value={satpam.id}>
-                      {satpam.first_name} {satpam.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="newBuildingPosition" className="text-right">
-                Posisi Gedung Baru
-              </Label>
-              <Select onValueChange={setNewSelectedBuildingPosition} value={newSelectedBuildingPosition} disabled={loading}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Pilih Gedung Baru" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
-                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
-                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSaveScheduleAssignment} disabled={loading}>
-              {loading ? "Menyimpan..." : "Simpan Perubahan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Card>
+        <CardHeader><CardTitle>Daftar Jadwal</CardTitle></CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Personel</TableHead><TableHead>Lokasi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {dailySchedulesSummary.map(s => (
+                <TableRow key={`${s.user_id}-${s.schedule_date}`}>
+                  <TableCell>{format(new Date(s.schedule_date), 'dd MMM yyyy')}</TableCell>
+                  <TableCell>{s.profileName}</TableCell>
+                  <TableCell>{s.locationDisplay}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="destructive" size="sm" onClick={() => handleDeleteGroupedSchedule(s.user_id, s.schedule_date)}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 };

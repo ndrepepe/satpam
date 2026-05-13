@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client'; // Hanya import supabase
+import { supabase } from '@/integrations/supabase/client';
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ interface Profile {
 
 interface PersonnelListProps {
   isAdmin: boolean;
-  refreshKey: number; // New prop for refresh
+  refreshKey: number;
 }
 
 const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) => {
@@ -35,11 +35,9 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   const fetchPersonnel = async () => {
     setLoading(true);
     try {
-      // Invoke Edge Function to list users with profiles
-      const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
+      const { data, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/list-users-with-profiles');
 
       if (error) {
-        console.error("Error invoking list-users-with-profiles Edge Function:", error);
         throw new Error(`Edge Function error: ${error.message}`);
       }
 
@@ -47,8 +45,6 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
         setPersonnel(data.personnel);
       } else if (data && data.error) {
         throw new Error(`Edge Function returned error: ${data.error}`);
-      } else {
-        throw new Error("Unexpected response from list-users-with-profiles Edge Function.");
       }
     } catch (error: any) {
       toast.error(`Gagal memuat daftar personel: ${error.message}`);
@@ -60,7 +56,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
 
   useEffect(() => {
     fetchPersonnel();
-  }, [refreshKey]); // Add refreshKey to dependencies
+  }, [refreshKey]);
 
   const handleDeletePersonnel = async (id: string, name: string) => {
     if (!isAdmin) {
@@ -69,13 +65,11 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
     }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        // Invoke Edge Function to delete user and profile
-        const { data, error } = await supabase.functions.invoke('delete-user-and-profile', {
+        const { data, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/delete-user-and-profile', {
           body: { userId: id },
         });
 
         if (error) {
-          console.error("Error invoking delete-user-and-profile Edge Function:", error);
           throw new Error(`Edge Function error: ${error.message}`);
         }
 
@@ -84,7 +78,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
         }
 
         toast.success(`Personel "${name}" berhasil dihapus.`);
-        fetchPersonnel(); // Refresh the list after deletion
+        fetchPersonnel();
       } catch (error: any) {
         toast.error(`Gagal menghapus personel: ${error.message}`);
         console.error("Error deleting personnel:", error);
