@@ -35,17 +35,16 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   const fetchPersonnel = async () => {
     setLoading(true);
     try {
-      // Menggunakan nama fungsi saja
-      const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
+      // Mengambil data langsung dari tabel profiles (lebih stabil)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, id_number, role')
+        .order('first_name', { ascending: true });
 
-      if (error) {
-        throw new Error(`Edge Function error: ${error.message}`);
-      }
+      if (error) throw error;
 
-      if (data && data.personnel) {
-        setPersonnel(data.personnel);
-      } else if (data && data.error) {
-        throw new Error(`Edge Function returned error: ${data.error}`);
+      if (data) {
+        setPersonnel(data);
       }
     } catch (error: any) {
       toast.error(`Gagal memuat daftar personel: ${error.message}`);
@@ -66,23 +65,24 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
     }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        const { data, error } = await supabase.functions.invoke('delete-user-and-profile', {
+        // Mencoba menghapus via Edge Function (untuk menghapus akun auth juga)
+        // Jika gagal, kita beri tahu user
+        const { error } = await supabase.functions.invoke('delete-user-and-profile', {
           body: { userId: id },
         });
 
         if (error) {
-          throw new Error(`Edge Function error: ${error.message}`);
+          // Jika Edge Function gagal, coba hapus profil saja sebagai fallback
+          const { error: profileError } = await supabase.from('profiles').delete().eq('id', id);
+          if (profileError) throw profileError;
+          toast.warning(`Profil dihapus, namun akun login mungkin masih ada karena kendala server.`);
+        } else {
+          toast.success(`Personel "${name}" berhasil dihapus.`);
         }
-
-        if (data && data.error) {
-          throw new Error(`Edge Function returned error: ${data.error}`);
-        }
-
-        toast.success(`Personel "${name}" berhasil dihapus.`);
+        
         fetchPersonnel();
       } catch (error: any) {
         toast.error(`Gagal menghapus personel: ${error.message}`);
-        console.error("Error deleting personnel:", error);
       }
     }
   };
@@ -104,48 +104,52 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   return (
     <div className="mt-6">
       <h3 className="text-xl font-semibold mb-4">Daftar Personel</h3>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nama Depan</TableHead>
-            <TableHead>Nama Belakang</TableHead>
-            <TableHead>Nomor ID</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Peran</TableHead>
-            {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {personnel.map((p) => (
-            <TableRow key={p.id}>
-              <TableCell className="font-medium">{p.first_name}</TableCell>
-              <TableCell>{p.last_name}</TableCell>
-              <TableCell>{p.id_number || '-'}</TableCell>
-              <TableCell>{p.email || '-'}</TableCell>
-              <TableCell>{p.role || 'Tidak Diketahui'}</TableCell>
-              {isAdmin && (
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditPersonnel(p)}
-                    className="mr-2"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
-                  >
-                    Hapus
-                  </Button>
-                </TableCell>
-              )}
+      {loading ? (
+        <p className="text-center py-4">Memuat data...</p>
+      ) : personnel.length === 0 ? (
+        <p className="text-center py-4 text-gray-500">Belum ada personel yang terdaftar.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nama Depan</TableHead>
+              <TableHead>Nama Belakang</TableHead>
+              <TableHead>Nomor ID</TableHead>
+              <TableHead>Peran</TableHead>
+              {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {personnel.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.first_name}</TableCell>
+                <TableCell>{p.last_name}</TableCell>
+                <TableCell>{p.id_number || '-'}</TableCell>
+                <TableCell className="capitalize">{p.role || 'Satpam'}</TableCell>
+                {isAdmin && (
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditPersonnel(p)}
+                      className="mr-2"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeletePersonnel(p.id, `${p.first_name} ${p.last_name}`)}
+                    >
+                      Hapus
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {selectedPersonnel && (
         <EditPersonnelModal

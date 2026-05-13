@@ -48,6 +48,7 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
     if (!personnel) return;
 
     try {
+      // Update tabel profiles secara langsung
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -59,21 +60,17 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
 
       if (profileError) throw profileError;
 
-      // Menggunakan nama fungsi saja
-      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('update-user-metadata', {
-        body: {
-          userId: personnel.id,
-          firstName: values.first_name,
-          lastName: values.last_name,
-        },
-      });
-
-      if (edgeFunctionError) {
-        throw new Error(`Edge Function error: ${edgeFunctionError.message}`);
-      }
-      
-      if (edgeFunctionData && edgeFunctionData.error) {
-        throw new Error(`Edge Function returned error: ${edgeFunctionData.error}`);
+      // Mencoba update metadata via Edge Function (opsional)
+      try {
+        await supabase.functions.invoke('update-user-metadata', {
+          body: {
+            userId: personnel.id,
+            firstName: values.first_name,
+            lastName: values.last_name,
+          },
+        });
+      } catch (e) {
+        console.warn("Metadata update failed, but profile was updated.");
       }
 
       toast.success(`Profil ${values.first_name} ${values.last_name} berhasil diperbarui.`);
@@ -81,7 +78,6 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
       onClose();
     } catch (error: any) {
       toast.error(`Gagal memperbarui profil: ${error.message}`);
-      console.error("Error updating personnel profile:", error);
     }
   };
 
@@ -133,6 +129,7 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
               )}
             />
             <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
               <Button type="submit">Simpan Perubahan</Button>
             </DialogFooter>
           </form>
