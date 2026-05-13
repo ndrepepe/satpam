@@ -67,7 +67,8 @@ const CheckAreaReport = () => {
       const arrayBuffer = await compressedBlob.arrayBuffer();
       const photoData = Array.from(new Uint8Array(arrayBuffer));
 
-      const { data, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/upload-selfie-to-supabase', {
+      // Menggunakan nama fungsi saja
+      const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
         body: {
           userId: user.id,
           locationId: locationId,

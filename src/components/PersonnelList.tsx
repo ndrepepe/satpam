@@ -35,7 +35,8 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
   const fetchPersonnel = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/list-users-with-profiles');
+      // Menggunakan nama fungsi saja
+      const { data, error } = await supabase.functions.invoke('list-users-with-profiles');
 
       if (error) {
         throw new Error(`Edge Function error: ${error.message}`);
@@ -65,7 +66,7 @@ const PersonnelList: React.FC<PersonnelListProps> = ({ isAdmin, refreshKey }) =>
     }
     if (window.confirm(`Apakah Anda yakin ingin menghapus personel "${name}"?`)) {
       try {
-        const { data, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/delete-user-and-profile', {
+        const { data, error } = await supabase.functions.invoke('delete-user-and-profile', {
           body: { userId: id },
         });
 

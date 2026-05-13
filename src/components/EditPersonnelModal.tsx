@@ -59,7 +59,8 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
 
       if (profileError) throw profileError;
 
-      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/update-user-metadata', {
+      // Menggunakan nama fungsi saja
+      const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('update-user-metadata', {
         body: {
           userId: personnel.id,
           firstName: values.first_name,
@@ -132,7 +133,6 @@ const EditPersonnelModal: React.FC<EditPersonnelModalProps> = ({ isOpen, onClose
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
               <Button type="submit">Simpan Perubahan</Button>
             </DialogFooter>
           </form>

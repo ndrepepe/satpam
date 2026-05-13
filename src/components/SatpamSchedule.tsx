@@ -320,7 +320,8 @@ const SatpamSchedule: React.FC = () => {
           }
         }
 
-        const { data: res, error } = await supabase.functions.invoke('https://gxbzdhrhlhrjdgzcfzbw.supabase.co/functions/v1/bulk-insert-schedules', {
+        // Menggunakan nama fungsi saja
+        const { data: res, error } = await supabase.functions.invoke('bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
 
