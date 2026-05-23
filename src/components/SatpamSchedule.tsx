@@ -320,7 +320,6 @@ const SatpamSchedule: React.FC = () => {
           }
         }
 
-        // Menggunakan nama fungsi saja
         const { data: res, error } = await supabase.functions.invoke('bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
@@ -335,6 +334,52 @@ const SatpamSchedule: React.FC = () => {
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      // Generate headers: Nama, No ID, and next 7 days
+      const headers = ['Nama', 'No ID'];
+      const today = new Date();
+      for (let i = 0; i < 7; i++) {
+        headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
+      }
+
+      // Create sample data using existing satpam list
+      const sampleRows = satpamList.map(s => {
+        const row: Record<string, string> = {
+          'Nama': `${s.first_name} ${s.last_name}`,
+          'No ID': s.id_number || '',
+        };
+        // Fill first date with sample position
+        headers.slice(2).forEach((date, idx) => {
+          row[date] = idx === 0 ? 'Semua Gedung' : ''; // sample value
+        });
+        return row;
+      });
+
+      // If no satpam list, add a dummy row
+      if (sampleRows.length === 0) {
+        const dummyRow: Record<string, string> = {
+          'Nama': 'Contoh Satpam',
+          'No ID': 'SP001',
+        };
+        headers.slice(2).forEach((date, idx) => {
+          dummyRow[date] = idx === 0 ? 'Semua Gedung' : '';
+        });
+        sampleRows.push(dummyRow);
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Jadwal');
+
+      // Write and download
+      XLSX.writeFile(workbook, 'Template_Jadwal_Satpam.xlsx');
+      toast.success("Template Excel berhasil diunduh!");
+    } catch (error: any) {
+      toast.error(`Gagal mengunduh template: ${error.message}`);
+    }
   };
 
   return (
@@ -370,10 +415,21 @@ const SatpamSchedule: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Impor XLSX</CardTitle></CardHeader>
-        <CardContent className="flex gap-2">
-          <Input type="file" accept=".xlsx" onChange={handleFileUpload} disabled={loading} />
-          <Button variant="outline" onClick={() => window.location.reload()}><Upload className="mr-2 h-4 w-4" /> Proses</Button>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle>Impor XLSX</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleDownloadTemplate}
+            className="text-indigo-600 hover:text-indigo-700 border-indigo-200 hover:bg-indigo-50 rounded-xl flex items-center gap-1.5"
+          >
+            <Download className="h-4 w-4" />
+            <span>Unduh Template Excel</span>
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-3">
+          <Input type="file" accept=".xlsx" onChange={handleFileUpload} disabled={loading} className="rounded-xl" />
+          <Button variant="outline" onClick={() => window.location.reload()} className="rounded-xl"><Upload className="mr-2 h-4 w-4" /> Proses</Button>
         </CardContent>
       </Card>
 
