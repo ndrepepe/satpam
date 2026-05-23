@@ -5,6 +5,7 @@ import { useSession } from '@/integrations/supabase/SessionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Camera, MapPin, UploadCloud, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -67,7 +68,6 @@ const CheckAreaReport = () => {
       const arrayBuffer = await compressedBlob.arrayBuffer();
       const photoData = Array.from(new Uint8Array(arrayBuffer));
 
-      // Menggunakan nama fungsi saja
       const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
         body: {
           userId: user.id,
@@ -86,7 +86,7 @@ const CheckAreaReport = () => {
       });
 
       if (insertError) throw insertError;
-      toast.success("Laporan terkirim!");
+      toast.success("Laporan patroli berhasil dikirim!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
       toast.error(`Gagal: ${error.message}`);
@@ -95,18 +95,89 @@ const CheckAreaReport = () => {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Memuat...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-65px)] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="animate-pulse flex flex-col items-center space-y-4">
+          <div className="p-3 bg-indigo-100 dark:bg-indigo-950 rounded-2xl">
+            <UploadCloud className="h-8 w-8 text-indigo-600 animate-bounce" />
+          </div>
+          <p className="text-sm font-medium text-slate-500">Menyiapkan formulir...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 flex justify-center">
-      <Card className="w-full max-w-md text-center">
-        <CardHeader><CardTitle>Laporan Cek Area</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <p className="font-semibold">Lokasi: {locationName}</p>
-          {photoPreviewUrl && <img src={photoPreviewUrl} className="w-full rounded shadow" />}
-          <input type="file" accept="image/*" capture="user" onChange={handlePhotoChange} ref={fileInputRef} className="hidden" />
-          <Button onClick={() => fileInputRef.current?.click()} className="w-full">Ambil Foto</Button>
-          <Button onClick={handleSubmitReport} className="w-full" disabled={!photoFile || loading}>Kirim Laporan</Button>
+    <div className="min-h-[calc(100vh-65px)] bg-slate-50 dark:bg-slate-950 py-8 px-4 flex flex-col justify-center">
+      <Card className="w-full max-w-md mx-auto border-none shadow-xl shadow-slate-100 dark:shadow-none rounded-3xl overflow-hidden bg-white dark:bg-slate-900">
+        <CardHeader className="pb-4">
+          <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 mb-2">
+            <MapPin className="h-5 w-5" />
+            <span className="text-xs font-bold tracking-wider uppercase">Lokasi Patroli</span>
+          </div>
+          <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
+            {locationName || "Memuat Lokasi..."}
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Ambil foto selfie di lokasi sebagai bukti kehadiran patroli Anda.
+          </p>
+
+          {/* Photo Preview Area */}
+          <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center shadow-inner">
+            {photoPreviewUrl ? (
+              <img 
+                src={photoPreviewUrl} 
+                alt="Pratinjau Laporan" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-center p-6 space-y-2 text-slate-400">
+                <Camera className="h-12 w-12 mx-auto stroke-[1.5]" />
+                <p className="text-xs font-medium">Belum ada foto yang diambil</p>
+              </div>
+            )}
+          </div>
+
+          <input 
+            type="file" 
+            accept="image/*" 
+            capture="user" 
+            onChange={handlePhotoChange} 
+            ref={fileInputRef} 
+            className="hidden" 
+          />
+
+          <div className="space-y-3">
+            <Button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="w-full py-6 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-2xl flex items-center justify-center space-x-2 transition-all duration-200"
+            >
+              <Camera className="h-5 w-5" />
+              <span>{photoFile ? "Ambil Ulang Foto" : "Ambil Foto Selfie"}</span>
+            </Button>
+
+            <Button 
+              onClick={handleSubmitReport} 
+              disabled={!photoFile || loading}
+              className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-400 flex items-center justify-center space-x-2"
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Kirim Laporan Patroli</span>
+            </Button>
+
+            <Button 
+              onClick={() => navigate('/satpam-dashboard')} 
+              variant="ghost" 
+              className="w-full py-6 text-slate-500 hover:text-slate-700 dark:text-slate-400 rounded-2xl flex items-center justify-center space-x-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Batal</span>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

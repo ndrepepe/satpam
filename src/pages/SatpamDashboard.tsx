@@ -5,17 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
+import { MapPin, CheckCircle2, AlertCircle, Search, Calendar, ShieldAlert } from 'lucide-react';
 
 interface Location {
   id: string;
@@ -23,11 +16,6 @@ interface Location {
   qr_code_data: string;
   created_at: string;
   isCheckedToday?: boolean;
-}
-
-interface CheckAreaReport {
-  location_id: string;
-  created_at: string;
 }
 
 const SatpamDashboard = () => {
@@ -38,6 +26,7 @@ const SatpamDashboard = () => {
   const [isSatpam, setIsSatpam] = useState(false);
   const [isScheduledToday, setIsScheduledToday] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentDateString, setCurrentDateString] = useState('');
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -65,63 +54,45 @@ const SatpamDashboard = () => {
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
 
-        // Calculate the "checking day" based on 06:00 AM GMT+7
         const now = new Date();
-        
-        // Create a Date object representing the current time in GMT+7
-        // This is done by taking current UTC time and adding 7 hours.
-        // Note: getTimezoneOffset() gives offset in minutes from UTC to local time.
-        // So, (now.getTimezoneOffset() * 60 * 1000) converts local time to UTC.
-        // Then, adding (7 * 60 * 60 * 1000) shifts it to GMT+7.
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
-
-        // Determine the calendar date for the "checking day" (06:00 AM GMT+7)
         let targetCalendarDateForSchedule = new Date(currentGMT7Time);
-        targetCalendarDateForSchedule.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7 (local time)
+        targetCalendarDateForSchedule.setHours(6, 0, 0, 0);
 
-        // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
         if (currentGMT7Time.getHours() < 6) {
           targetCalendarDateForSchedule.setDate(targetCalendarDateForSchedule.getDate() - 1);
         }
         
-        // Format this target date to YYYY-MM-DD for the database query (for 'schedules' table)
         const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
-        console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
+        setCurrentDateString(format(targetCalendarDateForSchedule, 'EEEE, dd MMMM yyyy'));
 
-        // --- NEW: Check if the user is scheduled for today and get assigned locations ---
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
-          .select('location_id') // Only need location_id for filtering
+          .select('location_id')
           .eq('user_id', user.id)
           .eq('schedule_date', formattedTargetScheduleDate);
 
         if (scheduleError) {
-          console.error("SatpamDashboard: Error fetching schedule for user:", scheduleError);
+          console.error("Error fetching schedule:", scheduleError);
           toast.error("Gagal memuat jadwal Anda.");
           setLoadingLocations(false);
           return;
         }
 
-        console.log("SatpamDashboard: Schedule data for user", user.id, "on", formattedTargetScheduleDate, ":", scheduleData);
-
         if (!scheduleData || scheduleData.length === 0) {
           setIsScheduledToday(false);
           setLoadingLocations(false);
-          toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
-          setLocations([]); // Clear locations if not scheduled
+          setLocations([]);
           return;
         }
-        setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
+        setIsScheduledToday(true);
 
-        // Extract scheduled location IDs
         const scheduledLocationIds = scheduleData.map(s => s.location_id);
-        console.log("SatpamDashboard: Scheduled Location IDs for today:", scheduledLocationIds);
 
-        // Fetch locations that are part of today's schedule
         const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
           .select('id, name, qr_code_data, created_at')
-          .in('id', scheduledLocationIds) // <--- THIS IS THE KEY CHANGE
+          .in('id', scheduledLocationIds)
           .order('name', { ascending: true });
 
         if (locationsError) {
@@ -131,19 +102,10 @@ const SatpamDashboard = () => {
           return;
         }
 
-        // For reports, we need the full timestamp range based on the determined 'checking day'
-        // Create a Date object representing 06:00 AM on the target calendar date, in the *local* timezone.
-        // The .toISOString() method will then correctly convert this local time to its UTC equivalent.
         const localStartOfCheckingDayForReports = new Date(targetCalendarDateForSchedule.getFullYear(), targetCalendarDateForSchedule.getMonth(), targetCalendarDateForSchedule.getDate(), 6, 0, 0);
-
-        // The UTC start time for the "checking day" (06:00 AM GMT+7)
         const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
-        // The UTC end time for the "checking day" (24 hours after the start)
         const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
-        console.log(`SatpamDashboard: Reports Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
-
-        // Fetch reports for the current user within the defined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, created_at')
@@ -180,90 +142,145 @@ const SatpamDashboard = () => {
     navigate(`/scan-location?id=${locationId}`);
   };
 
-  // Filtered locations based on search query
   const filteredLocations = locations.filter(loc =>
     loc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const checkedCount = locations.filter(l => l.isCheckedToday).length;
+  const totalCount = locations.length;
+  const progressPercentage = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
+
   if (sessionLoading || loadingLocations) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <p className="text-xl text-gray-600 dark:text-gray-400">Memuat dashboard satpam...</p>
+      <div className="min-h-[calc(100vh-65px)] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="animate-pulse flex flex-col items-center space-y-4">
+          <div className="p-3 bg-indigo-100 dark:bg-indigo-950 rounded-2xl">
+            <MapPin className="h-8 w-8 text-indigo-600 animate-bounce" />
+          </div>
+          <p className="text-sm font-medium text-slate-500">Memuat tugas patroli...</p>
+        </div>
       </div>
     );
   }
 
-  if (!isSatpam) {
-    return null;
-  }
+  if (!isSatpam) return null;
 
   return (
-    <div className="container mx-auto p-4">
-      <Card className="max-w-3xl mx-auto mt-8">
-        <CardHeader>
-          <CardTitle className="text-center">Dashboard Satpam</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <h3 className="text-xl font-semibold mb-4 text-center">Daftar Lokasi Cek Area</h3>
-          {!isScheduledToday ? (
-            <p className="text-center text-lg text-red-500 dark:text-red-400">
-              Anda tidak memiliki jadwal tugas untuk hari ini.
-            </p>
-          ) : (
-            <>
-              <div className="mb-4">
-                <Input
-                  type="text"
-                  placeholder="Cari lokasi..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full"
+    <div className="min-h-[calc(100vh-65px)] bg-slate-50 dark:bg-slate-950 pb-12">
+      {/* Header Section */}
+      <div className="bg-gradient-to-b from-indigo-600 to-indigo-700 text-white py-8 px-4 rounded-b-[2.5rem] shadow-lg shadow-indigo-100 dark:shadow-none">
+        <div className="max-w-md mx-auto space-y-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-indigo-100 text-xs font-semibold tracking-wider uppercase">Petugas Patroli</p>
+              <h2 className="text-xl font-bold mt-0.5">Halo, Rekan Satpam</h2>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-2xl flex items-center space-x-1.5 text-xs">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>{currentDateString || 'Hari Ini'}</span>
+            </div>
+          </div>
+
+          {isScheduledToday && totalCount > 0 && (
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl space-y-2">
+              <div className="flex justify-between text-xs font-medium">
+                <span>Progres Patroli Hari Ini</span>
+                <span>{checkedCount} dari {totalCount} Lokasi</span>
+              </div>
+              <div className="w-full bg-white/20 h-2.5 rounded-full overflow-hidden">
+                <div 
+                  className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
                 />
               </div>
-              {filteredLocations.length === 0 ? (
-                <p className="text-center text-gray-600 dark:text-gray-400">
-                  {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar untuk jadwal Anda hari ini."}
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Nama Lokasi</TableHead>
-                        <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
-                        <TableHead className="text-center w-[120px]">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredLocations.map((loc) => (
-                        <TableRow key={loc.id}>
-                          <TableCell className="font-medium text-center">{loc.name}</TableCell>
-                          <TableCell className="w-[150px] text-center">
-                            {loc.isCheckedToday ? (
-                              <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
-                            ) : (
-                              <Badge variant="destructive">Belum Dicek</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center w-[120px]">
-                            <Button
-                              size="sm"
-                              onClick={() => handleScanLocation(loc.id)}
-                              disabled={loc.isCheckedToday}
-                            >
-                              {loc.isCheckedToday ? "Sudah Dicek" : "Cek Lokasi"}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-md mx-auto px-4 -mt-4">
+        {!isScheduledToday ? (
+          <Card className="border-none shadow-xl shadow-slate-100 dark:shadow-none rounded-3xl overflow-hidden mt-8">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-2xl flex items-center justify-center">
+                <ShieldAlert className="h-8 w-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tidak Ada Jadwal</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Anda tidak memiliki jadwal tugas patroli untuk hari ini. Silakan hubungi atasan jika ini keliru.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4 mt-6">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Cari lokasi patroli..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-6 bg-white dark:bg-slate-900 border-none shadow-md shadow-slate-100 dark:shadow-none rounded-2xl focus-visible:ring-2 focus-visible:ring-indigo-500"
+              />
+            </div>
+
+            {/* Location Cards */}
+            <div className="space-y-3">
+              {filteredLocations.length === 0 ? (
+                <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl shadow-md shadow-slate-100 dark:shadow-none">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {searchQuery ? "Lokasi tidak ditemukan." : "Belum ada lokasi patroli."}
+                  </p>
+                </div>
+              ) : (
+                filteredLocations.map((loc) => (
+                  <div 
+                    key={loc.id}
+                    className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-md shadow-slate-100 dark:shadow-none border border-slate-100/50 dark:border-slate-800/50 flex items-center justify-between transition-all duration-200 hover:shadow-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-3 rounded-xl ${loc.isCheckedToday ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400'}`}>
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">{loc.name}</h4>
+                        <div className="flex items-center">
+                          {loc.isCheckedToday ? (
+                            <span className="inline-flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Sudah Dicek
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-xs font-medium text-amber-600 dark:text-amber-400">
+                              <AlertCircle className="h-3 w-3 mr-1" /> Belum Dicek
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() => handleScanLocation(loc.id)}
+                      disabled={loc.isCheckedToday}
+                      className={`rounded-xl px-4 font-semibold text-xs transition-all duration-200 ${
+                        loc.isCheckedToday 
+                          ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' 
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 dark:shadow-none'
+                      }`}
+                    >
+                      {loc.isCheckedToday ? "Selesai" : "Mulai Cek"}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
