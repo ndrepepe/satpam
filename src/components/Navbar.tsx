@@ -19,7 +19,8 @@ const Navbar = () => {
       toast.error("Gagal logout: " + error.message);
     } else {
       toast.success("Berhasil logout!");
-      navigate('/login');
+      // Menggunakan hard redirect agar state bersih total dan pasti pindah ke halaman login
+      window.location.href = '/login';
     }
   };
 
