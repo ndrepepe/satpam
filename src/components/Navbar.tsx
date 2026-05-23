@@ -12,7 +12,10 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) {
+    
+    // Jika error adalah karena sesi memang sudah tidak ada, atau jika logout berhasil,
+    // kita tetap arahkan pengguna ke halaman login karena mereka secara teknis sudah keluar.
+    if (error && error.message !== 'Auth session missing!') {
       toast.error("Gagal logout: " + error.message);
     } else {
       toast.success("Berhasil logout!");
