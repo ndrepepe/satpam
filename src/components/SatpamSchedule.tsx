@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, Trash2, Upload, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Upload, RefreshCw, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -217,6 +217,29 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const tomorrowStr = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
+      
+      const headers = ["No ID", "Nama Satpam", todayStr, tomorrowStr];
+      const sampleRows = [
+        headers,
+        ["SP001", "Budi Santoso", "Gedung Barat", "Gedung Timur"],
+        ["SP002", "Andi Wijaya", "Semua Gedung", "Gedung Barat"]
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(sampleRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Template Jadwal");
+      
+      XLSX.writeFile(workbook, "template_jadwal_satpam.xlsx");
+      toast.success("Template Excel berhasil diunduh!");
+    } catch (error: any) {
+      toast.error(`Gagal mengunduh template: ${error.message}`);
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -326,8 +349,17 @@ const SatpamSchedule: React.FC = () => {
 
       {/* Card 2: Impor XLSX */}
       <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
-        <CardHeader className="border-b border-slate-800/40 bg-slate-900/20 py-4 px-6">
+        <CardHeader className="border-b border-slate-800/40 bg-slate-900/20 py-4 px-6 flex flex-row items-center justify-between">
           <CardTitle className="text-base font-bold text-white font-mono uppercase tracking-wider">Impor XLSX</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleDownloadTemplate}
+            className="rounded-lg border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 transition-all duration-200 font-mono text-xs"
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            Unduh Template
+          </Button>
         </CardHeader>
         <CardContent className="p-6 flex flex-col sm:flex-row gap-3">
           <Input 
@@ -342,7 +374,7 @@ const SatpamSchedule: React.FC = () => {
             onClick={() => window.location.reload()}
             className="rounded-xl border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-500/30 transition-all duration-200 py-5 px-5 font-mono text-xs uppercase tracking-wider"
           >
-            <RefreshCw className="mr-2 h-4 w-4 text-cyan-400 animate-spin-slow" /> 
+            <RefreshCw className="mr-2 h-4 w-4 text-cyan-400" /> 
             Proses
           </Button>
         </CardContent>
