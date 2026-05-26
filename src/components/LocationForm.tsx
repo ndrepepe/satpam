@@ -28,7 +28,7 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
     resolver: zodResolver(locationSchema),
     defaultValues: {
       name: '',
-      posisi_gedung: undefined, // Set to undefined initially
+      posisi_gedung: undefined,
     },
   });
 
@@ -49,7 +49,7 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
 
       toast.success(`Lokasi "${values.name}" berhasil dibuat.`);
       form.reset();
-      onLocationCreated(); // Panggil callback untuk memberitahu bahwa lokasi baru telah dibuat
+      onLocationCreated();
     } catch (error: any) {
       toast.error(`Gagal membuat lokasi: ${error.message}`);
       console.error("Error creating location:", error);
@@ -58,17 +58,21 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nama Lokasi</FormLabel>
+              <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Nama Lokasi</FormLabel>
               <FormControl>
-                <Input placeholder="Contoh: Pos Utama, Gudang A" {...field} />
+                <Input 
+                  placeholder="Contoh: Pos Utama, Gudang A" 
+                  {...field} 
+                  className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                />
               </FormControl>
-              <FormMessage />
+              <FormMessage className="text-red-400 text-xs font-mono" />
             </FormItem>
           )}
         />
@@ -77,23 +81,28 @@ const LocationForm: React.FC<LocationFormProps> = ({ onLocationCreated }) => {
           name="posisi_gedung"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Posisi Gedung</FormLabel>
+              <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Posisi Gedung</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-slate-900/80 border-slate-800 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5">
                     <SelectValue placeholder="Pilih posisi gedung" />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
-                  <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
-                  <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
+                <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                  <SelectItem value="Gedung Barat" className="focus:bg-slate-900 focus:text-white">Gedung Barat</SelectItem>
+                  <SelectItem value="Gedung Timur" className="focus:bg-slate-900 focus:text-white">Gedung Timur</SelectItem>
                 </SelectContent>
               </Select>
-              <FormMessage />
+              <FormMessage className="text-red-400 text-xs font-mono" />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full">Buat Lokasi & QR Code</Button>
+        <Button 
+          type="submit" 
+          className="w-full py-6 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-mono uppercase tracking-wider font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all duration-300"
+        >
+          Buat Lokasi & QR Code
+        </Button>
       </form>
     </Form>
   );
