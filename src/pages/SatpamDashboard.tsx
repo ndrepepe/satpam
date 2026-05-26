@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
+import { Shield, Search, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface Location {
   id: string;
@@ -23,11 +24,6 @@ interface Location {
   qr_code_data: string;
   created_at: string;
   isCheckedToday?: boolean;
-}
-
-interface CheckAreaReport {
-  location_id: string;
-  created_at: string;
 }
 
 const SatpamDashboard = () => {
@@ -65,33 +61,21 @@ const SatpamDashboard = () => {
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
 
-        // Calculate the "checking day" based on 06:00 AM GMT+7
         const now = new Date();
-        
-        // Create a Date object representing the current time in GMT+7
-        // This is done by taking current UTC time and adding 7 hours.
-        // Note: getTimezoneOffset() gives offset in minutes from UTC to local time.
-        // So, (now.getTimezoneOffset() * 60 * 1000) converts local time to UTC.
-        // Then, adding (7 * 60 * 60 * 1000) shifts it to GMT+7.
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
 
-        // Determine the calendar date for the "checking day" (06:00 AM GMT+7)
         let targetCalendarDateForSchedule = new Date(currentGMT7Time);
-        targetCalendarDateForSchedule.setHours(6, 0, 0, 0); // Set to 06:00 AM GMT+7 (local time)
+        targetCalendarDateForSchedule.setHours(6, 0, 0, 0);
 
-        // If current GMT+7 time is before 6 AM, the schedule for "today" actually refers to yesterday's calendar date
         if (currentGMT7Time.getHours() < 6) {
           targetCalendarDateForSchedule.setDate(targetCalendarDateForSchedule.getDate() - 1);
         }
         
-        // Format this target date to YYYY-MM-DD for the database query (for 'schedules' table)
         const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
-        console.log("SatpamDashboard: Checking schedule for user", user.id, "on date (GMT+7 adjusted):", formattedTargetScheduleDate);
 
-        // --- NEW: Check if the user is scheduled for today and get assigned locations ---
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
-          .select('location_id') // Only need location_id for filtering
+          .select('location_id')
           .eq('user_id', user.id)
           .eq('schedule_date', formattedTargetScheduleDate);
 
@@ -102,26 +86,20 @@ const SatpamDashboard = () => {
           return;
         }
 
-        console.log("SatpamDashboard: Schedule data for user", user.id, "on", formattedTargetScheduleDate, ":", scheduleData);
-
         if (!scheduleData || scheduleData.length === 0) {
           setIsScheduledToday(false);
           setLoadingLocations(false);
-          toast.info("Anda tidak memiliki jadwal tugas untuk hari ini.");
-          setLocations([]); // Clear locations if not scheduled
+          setLocations([]);
           return;
         }
-        setIsScheduledToday(true); // User is scheduled, proceed to fetch locations
+        setIsScheduledToday(true);
 
-        // Extract scheduled location IDs
         const scheduledLocationIds = scheduleData.map(s => s.location_id);
-        console.log("SatpamDashboard: Scheduled Location IDs for today:", scheduledLocationIds);
 
-        // Fetch locations that are part of today's schedule
         const { data: locationsData, error: locationsError } = await supabase
           .from('locations')
           .select('id, name, qr_code_data, created_at')
-          .in('id', scheduledLocationIds) // <--- THIS IS THE KEY CHANGE
+          .in('id', scheduledLocationIds)
           .order('name', { ascending: true });
 
         if (locationsError) {
@@ -131,19 +109,10 @@ const SatpamDashboard = () => {
           return;
         }
 
-        // For reports, we need the full timestamp range based on the determined 'checking day'
-        // Create a Date object representing 06:00 AM on the target calendar date, in the *local* timezone.
-        // The .toISOString() method will then correctly convert this local time to its UTC equivalent.
         const localStartOfCheckingDayForReports = new Date(targetCalendarDateForSchedule.getFullYear(), targetCalendarDateForSchedule.getMonth(), targetCalendarDateForSchedule.getDate(), 6, 0, 0);
-
-        // The UTC start time for the "checking day" (06:00 AM GMT+7)
         const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
-        // The UTC end time for the "checking day" (24 hours after the start)
         const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
-        console.log(`SatpamDashboard: Reports Query UTC Range: GTE ${startOfCheckingDayUTC} AND LT ${endOfCheckingDayUTC}`);
-
-        // Fetch reports for the current user within the defined "checking day"
         const { data: reportsData, error: reportsError } = await supabase
           .from('check_area_reports')
           .select('location_id, created_at')
@@ -180,78 +149,118 @@ const SatpamDashboard = () => {
     navigate(`/scan-location?id=${locationId}`);
   };
 
-  // Filtered locations based on search query
   const filteredLocations = locations.filter(loc =>
     loc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (sessionLoading || loadingLocations) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <p className="text-xl text-gray-600 dark:text-gray-400">Memuat dashboard satpam...</p>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="relative flex h-16 w-16 items-center justify-center">
+          <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20 border-t-cyan-400 animate-spin" />
+          <Shield className="h-6 w-6 text-cyan-400 animate-pulse" />
+        </div>
       </div>
     );
   }
 
-  if (!isSatpam) {
-    return null;
-  }
+  if (!isSatpam) return null;
 
   return (
-    <div className="container mx-auto p-4">
-      <Card className="max-w-3xl mx-auto mt-8">
-        <CardHeader>
-          <CardTitle className="text-center">Dashboard Satpam</CardTitle>
+    <div className="w-full max-w-4xl mx-auto relative group">
+      {/* Glowing background aura */}
+      <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
+
+      <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/60 backdrop-blur-2xl shadow-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-800/80 pb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 p-[1px] shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-950">
+                  <Shield className="h-6 w-6 text-cyan-400" />
+                </div>
+              </div>
+              <div>
+                <CardTitle className="text-2xl font-extrabold tracking-wider text-white">HUD TAKTIS SATPAM</CardTitle>
+                <p className="text-xs text-slate-400 font-mono uppercase tracking-widest mt-0.5">Sistem Pemantauan Area Real-Time</p>
+              </div>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <h3 className="text-xl font-semibold mb-4 text-center">Daftar Lokasi Cek Area</h3>
+        
+        <CardContent className="pt-6 space-y-6">
           {!isScheduledToday ? (
-            <p className="text-center text-lg text-red-500 dark:text-red-400">
-              Anda tidak memiliki jadwal tugas untuk hari ini.
-            </p>
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal Tugas</h4>
+                <p className="text-sm text-slate-400 mt-1">Anda tidak memiliki jadwal tugas aktif untuk hari ini.</p>
+              </div>
+            </div>
           ) : (
             <>
-              <div className="mb-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Cari lokasi..."
+                  placeholder="Cari lokasi patroli..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full"
+                  className="pl-11 pr-4 py-6 rounded-2xl border-slate-800/80 bg-slate-900/40 text-white placeholder-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 transition-all duration-300"
                 />
               </div>
+
               {filteredLocations.length === 0 ? (
-                <p className="text-center text-gray-600 dark:text-gray-400">
-                  {searchQuery ? "Tidak ada lokasi yang cocok dengan pencarian Anda." : "Belum ada lokasi yang terdaftar untuk jadwal Anda hari ini."}
+                <p className="text-center py-12 text-slate-400 font-mono">
+                  {searchQuery ? "Tidak ada lokasi yang cocok." : "Belum ada lokasi terdaftar hari ini."}
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/20">
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Nama Lokasi</TableHead>
-                        <TableHead className="w-[150px] text-center">Status Cek Hari Ini</TableHead>
-                        <TableHead className="text-center w-[120px]">Aksi</TableHead>
+                    <TableHeader className="bg-slate-900/50">
+                      <TableRow className="border-b border-slate-800/80 hover:bg-transparent">
+                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Lokasi Patroli</TableHead>
+                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center w-[180px]">Status</TableHead>
+                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center w-[150px]">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredLocations.map((loc) => (
-                        <TableRow key={loc.id}>
-                          <TableCell className="font-medium text-center">{loc.name}</TableCell>
-                          <TableCell className="w-[150px] text-center">
+                        <TableRow key={loc.id} className="border-b border-slate-800/50 hover:bg-slate-900/30 transition-colors duration-200">
+                          <TableCell className="font-medium text-white text-center py-4">
+                            <div className="flex items-center justify-center space-x-2">
+                              <MapPin className="h-4 w-4 text-cyan-400" />
+                              <span>{loc.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center py-4">
                             {loc.isCheckedToday ? (
-                              <Badge className="bg-green-500 hover:bg-green-500">Sudah Dicek</Badge>
+                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full font-mono text-xs">
+                                <CheckCircle2 className="mr-1 h-3.5 w-3.5 inline" />
+                                SELESAI
+                              </Badge>
                             ) : (
-                              <Badge variant="destructive">Belum Dicek</Badge>
+                              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1 rounded-full font-mono text-xs">
+                                <AlertCircle className="mr-1 h-3.5 w-3.5 inline" />
+                                BELUM DICEK
+                              </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-center w-[120px]">
+                          <TableCell className="text-center py-4">
                             <Button
                               size="sm"
                               onClick={() => handleScanLocation(loc.id)}
                               disabled={loc.isCheckedToday}
+                              className={`rounded-xl font-mono text-xs px-4 py-2 transition-all duration-300 ${
+                                loc.isCheckedToday 
+                                  ? "bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed" 
+                                  : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]"
+                              }`}
                             >
-                              {loc.isCheckedToday ? "Sudah Dicek" : "Cek Lokasi"}
+                              {loc.isCheckedToday ? "COMPLETED" : "SCAN QR"}
                             </Button>
                           </TableCell>
                         </TableRow>
