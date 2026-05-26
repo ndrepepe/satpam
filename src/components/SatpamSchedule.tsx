@@ -10,23 +10,13 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, Trash2, Edit, Upload, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Upload, RefreshCw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import * as XLSX from 'xlsx';
 
@@ -62,14 +52,6 @@ interface DailyScheduleSummaryEntry {
   assignedLocationIds: Set<string>;
 }
 
-interface SummarizedRangeScheduleEntry {
-  schedule_date: string;
-  user_id: string;
-  profileName: string;
-  idNumber?: string;
-  locationDisplay: string;
-}
-
 const SatpamSchedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [satpamList, setSatpamList] = useState<SatpamProfile[]>([]);
@@ -78,17 +60,6 @@ const SatpamSchedule: React.FC = () => {
   const [selectedSatpamId, setSelectedSatpamId] = useState<string | undefined>(undefined);
   const [selectedBuildingPosition, setSelectedBuildingPosition] = useState<string | undefined>('Semua Gedung');
   const [loading, setLoading] = useState(true);
-
-  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
-  const [originalUserId, setOriginalUserId] = useState<string | null>(null);
-  const [originalScheduleDate, setOriginalScheduleDate] = useState<string | null>(null);
-  const [originalLocationAssignmentType, setOriginalLocationAssignmentType] = useState<string | undefined>(undefined);
-  const [newSelectedSatpamId, setNewSelectedSatpamId] = useState<string | undefined>(undefined);
-  const [newSelectedBuildingPosition, setNewSelectedBuildingPosition] = useState<string | undefined>(undefined);
-
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
-  const [rangeSchedules, setRangeSchedules] = useState<ScheduleEntry[]>([]);
 
   const idNumberToUserIdMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -153,39 +124,6 @@ const SatpamSchedule: React.FC = () => {
     }
   };
 
-  const fetchRangeSchedules = async () => {
-    if (!startDate || !endDate) {
-      toast.error("Harap pilih tanggal mulai dan tanggal akhir.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const formattedStartDate = format(startDate, 'yyyy-MM-dd');
-      const formattedEndDate = format(endDate, 'yyyy-MM-dd');
-
-      const { data, error } = await supabase
-        .from('schedules')
-        .select(`
-          id,
-          schedule_date,
-          user_id,
-          location_id,
-          profiles (first_name, last_name, id_number),
-          locations (name, posisi_gedung)
-        `)
-        .gte('schedule_date', formattedStartDate)
-        .lte('schedule_date', formattedEndDate)
-        .order('schedule_date', { ascending: true }); 
-
-      if (error) throw error;
-      setRangeSchedules(data as unknown as ScheduleEntry[]);
-    } catch (error: any) {
-      toast.error(`Gagal memuat jadwal dalam rentang: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -218,31 +156,14 @@ const SatpamSchedule: React.FC = () => {
       const gedungTimurCount = locationList.filter(l => l.posisi_gedung === 'Gedung Timur').length;
       const assignedCount = entry.assignedLocationIds.size;
 
-      if (assignedCount === locationList.length) entry.locationDisplay = "Semua Gedung";
-      else if (assignedCount === gedungBaratCount) entry.locationDisplay = "Gedung Barat";
-      else if (assignedCount === gedungTimurCount) entry.locationDisplay = "Gedung Timur";
+      if (assignedCount === locationList.length && locationList.length > 0) entry.locationDisplay = "Semua Gedung";
+      else if (assignedCount === gedungBaratCount && gedungBaratCount > 0) entry.locationDisplay = "Gedung Barat";
+      else if (assignedCount === gedungTimurCount && gedungTimurCount > 0) entry.locationDisplay = "Gedung Timur";
       else entry.locationDisplay = "Beberapa Lokasi";
 
       return entry;
     });
   }, [schedules, locationList]);
-
-  const processedRangeSchedules = useMemo(() => {
-    const grouped = new Map<string, SummarizedRangeScheduleEntry>();
-    rangeSchedules.forEach(schedule => {
-      const key = `${schedule.schedule_date}-${schedule.user_id}`;
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          schedule_date: schedule.schedule_date,
-          user_id: schedule.user_id,
-          profileName: schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'N/A',
-          idNumber: schedule.profiles?.id_number || 'N/A',
-          locationDisplay: 'Ditugaskan',
-        });
-      }
-    });
-    return Array.from(grouped.values());
-  }, [rangeSchedules]);
 
   const handleSaveSchedule = async () => {
     if (!selectedDate || !selectedSatpamId || !selectedBuildingPosition) {
@@ -253,6 +174,11 @@ const SatpamSchedule: React.FC = () => {
     let locationsToAssign = selectedBuildingPosition === 'Semua Gedung' 
       ? locationList 
       : locationList.filter(loc => loc.posisi_gedung === selectedBuildingPosition);
+
+    if (locationsToAssign.length === 0) {
+      toast.error("Tidak ada lokasi yang cocok dengan posisi gedung yang dipilih.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -281,7 +207,7 @@ const SatpamSchedule: React.FC = () => {
       try {
         const { error } = await supabase.from('schedules').delete().eq('user_id', userId).eq('schedule_date', scheduleDate);
         if (error) throw error;
-        toast.success("Jadwal dihapus.");
+        toast.success("Jadwal berhasil dihapus.");
         if (selectedDate) fetchSchedules(selectedDate);
       } catch (error: any) {
         toast.error(error.message);
@@ -305,7 +231,6 @@ const SatpamSchedule: React.FC = () => {
         const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
         
         const headers = rawData[0];
-        const nameColIndex = headers.indexOf('Nama');
         const idColIndex = headers.indexOf('No ID');
         const dateColumns = headers.map((h, i) => ({ header: h, index: i })).filter(h => !isNaN(new Date(h.header).getTime()));
 
@@ -320,16 +245,15 @@ const SatpamSchedule: React.FC = () => {
           }
         }
 
-        // Menggunakan nama fungsi saja
         const { data: res, error } = await supabase.functions.invoke('bulk-insert-schedules', {
           body: { schedulesData: schedulesToProcess },
         });
 
         if (error || res?.error) throw new Error(error?.message || res?.error);
-        toast.success("Jadwal diimpor!");
+        toast.success("Jadwal berhasil diimpor!");
         if (selectedDate) fetchSchedules(selectedDate);
       } catch (error: any) {
-        toast.error(`Gagal: ${error.message}`);
+        toast.error(`Gagal mengimpor jadwal: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -339,62 +263,145 @@ const SatpamSchedule: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader><CardTitle>Tambah Jadwal Baru</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+      {/* Card 1: Tambah Jadwal Baru */}
+      <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-800/40 bg-slate-900/20 py-4 px-6">
+          <CardTitle className="text-base font-bold text-white font-mono uppercase tracking-wider">Tambah Jadwal Baru</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start bg-slate-900/80 border-slate-800 text-white hover:bg-slate-800 hover:text-white rounded-xl py-5 font-mono text-xs"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 text-cyan-400" />
                   {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : "Pilih tanggal"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} /></PopoverContent>
+              <PopoverContent className="w-auto p-0 bg-slate-950 border-slate-800">
+                <Calendar 
+                  mode="single" 
+                  selected={selectedDate} 
+                  onSelect={setSelectedDate} 
+                  className="bg-slate-950 text-white"
+                />
+              </PopoverContent>
             </Popover>
+
             <Select onValueChange={setSelectedSatpamId} value={selectedSatpamId}>
-              <SelectTrigger><SelectValue placeholder="Pilih Satpam" /></SelectTrigger>
-              <SelectContent>{satpamList.map(s => <SelectItem key={s.id} value={s.id}>{s.first_name} {s.last_name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="bg-slate-900/80 border-slate-800 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5 font-mono text-xs">
+                <SelectValue placeholder="Pilih Satpam" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                {satpamList.map(s => (
+                  <SelectItem key={s.id} value={s.id} className="focus:bg-slate-900 focus:text-white">
+                    {s.first_name} {s.last_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
+
             <Select onValueChange={setSelectedBuildingPosition} value={selectedBuildingPosition}>
-              <SelectTrigger><SelectValue placeholder="Pilih Gedung" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Semua Gedung">Semua Gedung</SelectItem>
-                <SelectItem value="Gedung Barat">Gedung Barat</SelectItem>
-                <SelectItem value="Gedung Timur">Gedung Timur</SelectItem>
+              <SelectTrigger className="bg-slate-900/80 border-slate-800 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5 font-mono text-xs">
+                <SelectValue placeholder="Pilih Gedung" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                <SelectItem value="Semua Gedung" className="focus:bg-slate-900 focus:text-white">Semua Gedung</SelectItem>
+                <SelectItem value="Gedung Barat" className="focus:bg-slate-900 focus:text-white">Gedung Barat</SelectItem>
+                <SelectItem value="Gedung Timur" className="focus:bg-slate-900 focus:text-white">Gedung Timur</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleSaveSchedule} className="w-full" disabled={loading}>Simpan Jadwal</Button>
+          <Button 
+            onClick={handleSaveSchedule} 
+            className="w-full py-5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-mono uppercase tracking-wider font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all duration-300" 
+            disabled={loading}
+          >
+            Simpan Jadwal
+          </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Impor XLSX</CardTitle></CardHeader>
-        <CardContent className="flex gap-2">
-          <Input type="file" accept=".xlsx" onChange={handleFileUpload} disabled={loading} />
-          <Button variant="outline" onClick={() => window.location.reload()}><Upload className="mr-2 h-4 w-4" /> Proses</Button>
+      {/* Card 2: Impor XLSX */}
+      <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-800/40 bg-slate-900/20 py-4 px-6">
+          <CardTitle className="text-base font-bold text-white font-mono uppercase tracking-wider">Impor XLSX</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 flex flex-col sm:flex-row gap-3">
+          <Input 
+            type="file" 
+            accept=".xlsx" 
+            onChange={handleFileUpload} 
+            disabled={loading} 
+            className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-2.5"
+          />
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.reload()}
+            className="rounded-xl border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-500/30 transition-all duration-200 py-5 px-5 font-mono text-xs uppercase tracking-wider"
+          >
+            <RefreshCw className="mr-2 h-4 w-4 text-cyan-400 animate-spin-slow" /> 
+            Proses
+          </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Daftar Jadwal</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Personel</TableHead><TableHead>Lokasi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {dailySchedulesSummary.map(s => (
-                <TableRow key={`${s.user_id}-${s.schedule_date}`}>
-                  <TableCell>{format(new Date(s.schedule_date), 'dd MMM yyyy')}</TableCell>
-                  <TableCell>{s.profileName}</TableCell>
-                  <TableCell>{s.locationDisplay}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteGroupedSchedule(s.user_id, s.schedule_date)}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
+      {/* Card 3: Daftar Jadwal */}
+      <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-slate-800/40 bg-slate-900/20 py-4 px-6">
+          <CardTitle className="text-base font-bold text-white font-mono uppercase tracking-wider">Daftar Jadwal</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-hidden">
+            <Table>
+              <TableHeader className="bg-slate-900/80 border-b border-slate-800/80">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-cyan-400 font-mono text-xs uppercase tracking-wider font-bold py-4 px-6">Tanggal</TableHead>
+                  <TableHead className="text-cyan-400 font-mono text-xs uppercase tracking-wider font-bold py-4 px-6">Personel</TableHead>
+                  <TableHead className="text-cyan-400 font-mono text-xs uppercase tracking-wider font-bold py-4 px-6">Lokasi</TableHead>
+                  <TableHead className="text-cyan-400 font-mono text-xs uppercase tracking-wider font-bold py-4 px-6 text-right">Aksi</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {dailySchedulesSummary.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-slate-400 font-mono text-sm">
+                      Belum ada jadwal untuk tanggal ini.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  dailySchedulesSummary.map(s => (
+                    <TableRow key={`${s.user_id}-${s.schedule_date}`} className="border-b border-slate-800/40 hover:bg-slate-900/40 transition-colors duration-200">
+                      <TableCell className="font-mono text-slate-300 py-4 px-6 text-sm">
+                        {format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: idLocale })}
+                      </TableCell>
+                      <TableCell className="font-semibold text-white py-4 px-6 text-sm">
+                        {s.profileName}
+                      </TableCell>
+                      <TableCell className="py-4 px-6 text-sm">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                          {s.locationDisplay}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-4 px-6 text-right">
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={() => handleDeleteGroupedSchedule(s.user_id, s.schedule_date)}
+                          className="rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all duration-200"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Hapus
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
