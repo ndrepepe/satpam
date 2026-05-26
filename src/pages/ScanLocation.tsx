@@ -4,14 +4,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { QrReader } from 'react-qr-reader'; // Import QrReader
+import { QrReader } from 'react-qr-reader';
+import { MapPin, Camera, ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 const ScanLocation = () => {
   const [searchParams] = useSearchParams();
   const locationId = searchParams.get('id');
   const [locationName, setLocationName] = useState<string | null>(null);
-  const [expectedQrData, setExpectedQrData] = useState<string | null>(null); // Untuk menyimpan data QR dari DB
-  const [scannedQrData, setScannedQrData] = useState<string | null>(null); // Untuk menyimpan data QR yang dipindai
+  const [expectedQrData, setExpectedQrData] = useState<string | null>(null);
+  const [scannedQrData, setScannedQrData] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'mismatch' | 'error'>('idle');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const ScanLocation = () => {
       if (locationId) {
         const { data, error } = await supabase
           .from('locations')
-          .select('name, qr_code_data') // Ambil qr_code_data
+          .select('name, qr_code_data')
           .eq('id', locationId)
           .single();
 
@@ -34,7 +35,7 @@ const ScanLocation = () => {
         } else if (data) {
           setLocationName(data.name);
           setExpectedQrData(data.qr_code_data);
-          setScanStatus('scanning'); // Mulai memindai setelah data dimuat
+          setScanStatus('scanning');
           toast.info(`Siap memindai QR Code untuk lokasi: ${data.name}`);
         }
       } else {
@@ -63,7 +64,6 @@ const ScanLocation = () => {
     }
 
     if (error) {
-      // console.error(error); // Log error scanner untuk debugging
       if (error.name === 'NotAllowedError' || error.name === 'NotFoundError') {
         setScanStatus('error');
         toast.error("Akses kamera ditolak atau tidak ditemukan. Harap izinkan akses kamera.");
@@ -84,74 +84,116 @@ const ScanLocation = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <p className="text-xl text-gray-600 dark:text-gray-400">Memuat detail lokasi...</p>
+      <div className="min-h-[calc(100vh-65px)] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="animate-pulse flex flex-col items-center space-y-4">
+          <div className="p-3 bg-indigo-100 dark:bg-indigo-950 rounded-2xl">
+            <Camera className="h-8 w-8 text-indigo-600 animate-bounce" />
+          </div>
+          <p className="text-sm font-medium text-slate-500">Menyiapkan kamera...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <Card className="w-full max-w-md mx-auto p-8 text-center">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-gray-900 dark:text-white">
+    <div className="min-h-[calc(100vh-65px)] bg-slate-50 dark:bg-slate-950 py-8 px-4 flex flex-col justify-center">
+      <Card className="w-full max-w-md mx-auto border-none shadow-xl shadow-slate-100 dark:shadow-none rounded-3xl overflow-hidden bg-white dark:bg-slate-900">
+        <CardHeader className="pb-4">
+          <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 mb-2">
+            <MapPin className="h-5 w-5" />
+            <span className="text-xs font-bold tracking-wider uppercase">Lokasi Patroli</span>
+          </div>
+          <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
             {locationName || "Memuat Lokasi..."}
           </CardTitle>
         </CardHeader>
+        
         <CardContent className="space-y-6">
           {locationName && locationName !== "Lokasi Tidak Ditemukan" && locationName !== "ID Lokasi Tidak Disediakan" ? (
             <>
-              <p className="text-lg text-gray-700 dark:text-gray-300">
-                Silakan pindai QR Code lokasi ini.
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Arahkan kamera ponsel Anda ke stiker QR Code yang tertempel di lokasi ini.
               </p>
-              <div className="w-full max-w-xs mx-auto border rounded-lg overflow-hidden">
+
+              {/* Scanner Container with Overlay */}
+              <div className="relative w-full max-w-xs mx-auto aspect-square rounded-2xl overflow-hidden bg-slate-950 shadow-inner border border-slate-800">
                 {scanStatus === 'scanning' || scanStatus === 'mismatch' ? (
-                  <QrReader
-                    onResult={handleScan}
-                    constraints={{ facingMode: 'environment' }} // Gunakan kamera belakang
-                    scanDelay={500} // Jeda antar pemindaian
-                    videoContainerStyle={{ width: '100%', paddingTop: '100%' }} // Pertahankan rasio aspek
-                    videoStyle={{ objectFit: 'cover' }}
-                  />
+                  <>
+                    <QrReader
+                      onResult={handleScan}
+                      constraints={{ facingMode: 'environment' }}
+                      scanDelay={500}
+                      videoContainerStyle={{ width: '100%', paddingTop: '100%' }}
+                      videoStyle={{ objectFit: 'cover' }}
+                    />
+                    {/* Scanning Frame Overlay */}
+                    <div className="absolute inset-0 pointer-events-none border-2 border-indigo-500/30 m-8 rounded-xl">
+                      {/* Corner Brackets */}
+                      <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-indigo-500 -mt-1 -ml-1 rounded-tl-md" />
+                      <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-indigo-500 -mt-1 -mr-1 rounded-tr-md" />
+                      <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-indigo-500 -mb-1 -ml-1 rounded-bl-md" />
+                      <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-indigo-500 -mb-1 -mr-1 rounded-br-md" />
+                      {/* Laser Line */}
+                      <div className="absolute left-0 right-0 h-0.5 bg-indigo-500 shadow-lg shadow-indigo-500 animate-pulse top-1/2 -translate-y-1/2" />
+                    </div>
+                  </>
                 ) : (
-                  <div className="w-full h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                    {scanStatus === 'success' && <p className="text-green-600 font-bold">QR Code Cocok!</p>}
-                    {scanStatus === 'error' && <p className="text-red-600 font-bold">Gagal Memuat Kamera atau Akses Ditolak</p>}
-                    {scanStatus === 'idle' && <p>Memuat Scanner...</p>}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                    {scanStatus === 'success' && (
+                      <div className="space-y-3">
+                        <div className="mx-auto w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center">
+                          <CheckCircle2 className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-bold text-emerald-500">QR Code Cocok!</p>
+                      </div>
+                    )}
+                    {scanStatus === 'error' && (
+                      <div className="space-y-3">
+                        <div className="mx-auto w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center">
+                          <AlertTriangle className="h-6 w-6" />
+                        </div>
+                        <p className="text-xs font-medium text-red-400">Gagal mengakses kamera. Izinkan izin kamera.</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-              {scannedQrData && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 break-all">
-                  Data Dipindai: {scannedQrData}
-                </p>
-              )}
-              {scanStatus === 'success' && (
-                <p className="text-green-600 font-semibold">QR Code berhasil dipindai dan cocok!</p>
-              )}
+
               {scanStatus === 'mismatch' && (
-                <p className="text-red-600 font-semibold">QR Code tidak cocok. Harap pindai QR Code yang benar.</p>
-              )}
-              {scanStatus === 'error' && (
-                <p className="text-red-600 font-semibold">Terjadi kesalahan pada scanner atau akses kamera ditolak.</p>
+                <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl text-center">
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+                    QR Code tidak cocok dengan lokasi ini. Silakan cari stiker QR yang benar.
+                  </p>
+                </div>
               )}
 
-              <Button
-                onClick={handleContinueReport}
-                className="mt-6 w-full"
-                disabled={scanStatus !== 'success'}
-              >
-                Lanjutkan Laporan
-              </Button>
+              <div className="space-y-3 pt-2">
+                <Button
+                  onClick={handleContinueReport}
+                  disabled={scanStatus !== 'success'}
+                  className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  Lanjutkan Laporan
+                </Button>
+                
+                <Button 
+                  onClick={() => navigate('/satpam-dashboard')} 
+                  variant="outline" 
+                  className="w-full py-6 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl flex items-center justify-center space-x-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Kembali ke Daftar Lokasi</span>
+                </Button>
+              </div>
             </>
           ) : (
-            <p className="text-lg text-red-500 dark:text-red-400">
-              Terjadi kesalahan saat memuat detail lokasi.
-            </p>
+            <div className="text-center py-6 space-y-4">
+              <p className="text-sm text-red-500 font-medium">Terjadi kesalahan saat memuat detail lokasi.</p>
+              <Button onClick={() => navigate('/satpam-dashboard')} className="w-full">
+                Kembali ke Dashboard
+              </Button>
+            </div>
           )}
-          <Button onClick={() => navigate('/satpam-dashboard')} variant="outline" className="mt-4 w-full">
-            Kembali ke Daftar Lokasi
-          </Button>
         </CardContent>
       </Card>
     </div>

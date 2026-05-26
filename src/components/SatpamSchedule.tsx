@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Calendar as CalendarIcon, Trash2, Upload, RefreshCw, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -219,21 +219,44 @@ const SatpamSchedule: React.FC = () => {
 
   const handleDownloadTemplate = () => {
     try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const tomorrowStr = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
-      
-      const headers = ["No ID", "Nama Satpam", todayStr, tomorrowStr];
-      const sampleRows = [
-        headers,
-        ["SP001", "Budi Santoso", "Gedung Barat", "Gedung Timur"],
-        ["SP002", "Andi Wijaya", "Semua Gedung", "Gedung Barat"]
-      ];
+      // Generate headers: Nama, No ID, and next 7 days
+      const headers = ['Nama', 'No ID'];
+      const today = new Date();
+      for (let i = 0; i < 7; i++) {
+        headers.push(format(addDays(today, i), 'yyyy-MM-dd'));
+      }
 
-      const worksheet = XLSX.utils.aoa_to_sheet(sampleRows);
+      // Create sample data using existing satpam list
+      const sampleRows = satpamList.map(s => {
+        const row: Record<string, string> = {
+          'Nama': `${s.first_name} ${s.last_name}`,
+          'No ID': s.id_number || '',
+        };
+        // Fill first date with sample position
+        headers.slice(2).forEach((date, idx) => {
+          row[date] = idx === 0 ? 'Semua Gedung' : ''; // sample value
+        });
+        return row;
+      });
+
+      // If no satpam list, add a dummy row
+      if (sampleRows.length === 0) {
+        const dummyRow: Record<string, string> = {
+          'Nama': 'Contoh Satpam',
+          'No ID': 'SP001',
+        };
+        headers.slice(2).forEach((date, idx) => {
+          dummyRow[date] = idx === 0 ? 'Semua Gedung' : '';
+        });
+        sampleRows.push(dummyRow);
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Template Jadwal");
-      
-      XLSX.writeFile(workbook, "template_jadwal_satpam.xlsx");
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Jadwal');
+
+      // Write and download
+      XLSX.writeFile(workbook, 'Template_Jadwal_Satpam.xlsx');
       toast.success("Template Excel berhasil diunduh!");
     } catch (error: any) {
       toast.error(`Gagal mengunduh template: ${error.message}`);

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar as CalendarIcon, ShieldAlert, Eye, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, ShieldAlert, Shield, CheckCircle2, AlertCircle, Eye, MapPin } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -237,6 +237,11 @@ const SupervisorDashboard = () => {
     return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
   }, [schedules, reports, locationList, selectedDate]);
 
+  // Calculate overall stats for the selected date
+  const totalAssignedLocations = schedules.length;
+  const totalCheckedLocations = reports.length;
+  const totalUncheckedLocations = Math.max(0, totalAssignedLocations - totalCheckedLocations);
+
   if (sessionLoading || loadingData) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -251,9 +256,48 @@ const SupervisorDashboard = () => {
   if (!isSupervisor) return null;
 
   return (
-    <div className="w-full max-w-5xl mx-auto relative group">
+    <div className="w-full max-w-5xl mx-auto relative group space-y-6">
       {/* Glowing background aura */}
       <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+          <CardContent className="p-6 flex items-center space-x-4">
+            <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
+              <MapPin className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Total Tugas</p>
+              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalAssignedLocations}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+          <CardContent className="p-6 flex items-center space-x-4">
+            <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Sudah Dicek</p>
+              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalCheckedLocations}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
+          <CardContent className="p-6 flex items-center space-x-4">
+            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Belum Dicek</p>
+              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalUncheckedLocations}</h3>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/60 backdrop-blur-2xl shadow-2xl overflow-hidden">
         <CardHeader className="border-b border-slate-800/80 pb-6">

@@ -5,18 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
-import { Shield, Search, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Shield, Search, MapPin, CheckCircle2, AlertCircle, Calendar, ShieldAlert } from 'lucide-react';
 
 interface Location {
   id: string;
@@ -34,6 +26,7 @@ const SatpamDashboard = () => {
   const [isSatpam, setIsSatpam] = useState(false);
   const [isScheduledToday, setIsScheduledToday] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentDateString, setCurrentDateString] = useState('');
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -63,7 +56,6 @@ const SatpamDashboard = () => {
 
         const now = new Date();
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
-
         let targetCalendarDateForSchedule = new Date(currentGMT7Time);
         targetCalendarDateForSchedule.setHours(6, 0, 0, 0);
 
@@ -72,6 +64,7 @@ const SatpamDashboard = () => {
         }
         
         const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
+        setCurrentDateString(format(targetCalendarDateForSchedule, 'EEEE, dd MMMM yyyy'));
 
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
@@ -80,7 +73,7 @@ const SatpamDashboard = () => {
           .eq('schedule_date', formattedTargetScheduleDate);
 
         if (scheduleError) {
-          console.error("SatpamDashboard: Error fetching schedule for user:", scheduleError);
+          console.error("Error fetching schedule:", scheduleError);
           toast.error("Gagal memuat jadwal Anda.");
           setLoadingLocations(false);
           return;
@@ -153,6 +146,10 @@ const SatpamDashboard = () => {
     loc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const checkedCount = locations.filter(l => l.isCheckedToday).length;
+  const totalCount = locations.length;
+  const progressPercentage = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
+
   if (sessionLoading || loadingLocations) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -185,6 +182,10 @@ const SatpamDashboard = () => {
                 <p className="text-xs text-slate-400 font-mono uppercase tracking-widest mt-0.5">Sistem Pemantauan Area Real-Time</p>
               </div>
             </div>
+            <div className="flex items-center space-x-2 rounded-xl border border-slate-800/80 bg-slate-900/50 px-4 py-2 text-xs text-slate-300 font-mono">
+              <Calendar className="h-4 w-4 text-cyan-400" />
+              <span>{currentDateString || 'Hari Ini'}</span>
+            </div>
           </div>
         </CardHeader>
         
@@ -192,7 +193,7 @@ const SatpamDashboard = () => {
           {!isScheduledToday ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
               <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
-                <AlertCircle className="h-6 w-6 text-red-400" />
+                <ShieldAlert className="h-6 w-6 text-red-400" />
               </div>
               <div>
                 <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal Tugas</h4>
@@ -201,6 +202,20 @@ const SatpamDashboard = () => {
             </div>
           ) : (
             <>
+              {/* Progress Bar */}
+              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3">
+                <div className="flex justify-between text-xs font-mono uppercase tracking-wider text-slate-300">
+                  <span>Progres Patroli Hari Ini</span>
+                  <span className="text-cyan-400">{checkedCount} dari {totalCount} Lokasi ({progressPercentage}%)</span>
+                </div>
+                <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                  <div 
+                    className="bg-gradient-to-r from-cyan-500 to-blue-600 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+              </div>
+
               {/* Search Bar */}
               <div className="relative">
                 <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
@@ -218,55 +233,46 @@ const SatpamDashboard = () => {
                   {searchQuery ? "Tidak ada lokasi yang cocok." : "Belum ada lokasi terdaftar hari ini."}
                 </p>
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/20">
-                  <Table>
-                    <TableHeader className="bg-slate-900/50">
-                      <TableRow className="border-b border-slate-800/80 hover:bg-transparent">
-                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Lokasi Patroli</TableHead>
-                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center w-[180px]">Status</TableHead>
-                        <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center w-[150px]">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredLocations.map((loc) => (
-                        <TableRow key={loc.id} className="border-b border-slate-800/50 hover:bg-slate-900/30 transition-colors duration-200">
-                          <TableCell className="font-medium text-white text-center py-4">
-                            <div className="flex items-center justify-center space-x-2">
-                              <MapPin className="h-4 w-4 text-cyan-400" />
-                              <span>{loc.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center py-4">
+                <div className="space-y-3">
+                  {filteredLocations.map((loc) => (
+                    <div 
+                      key={loc.id}
+                      className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 flex items-center justify-between transition-all duration-200 hover:border-cyan-500/30 hover:bg-slate-900/60"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className={`p-3 rounded-xl ${loc.isCheckedToday ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
+                          <MapPin className="h-5 w-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-white text-sm">{loc.name}</h4>
+                          <div className="flex items-center">
                             {loc.isCheckedToday ? (
-                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full font-mono text-xs">
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5 inline" />
-                                SELESAI
-                              </Badge>
+                              <span className="inline-flex items-center text-xs font-mono text-emerald-400">
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> SELESAI
+                              </span>
                             ) : (
-                              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1 rounded-full font-mono text-xs">
-                                <AlertCircle className="mr-1 h-3.5 w-3.5 inline" />
-                                BELUM DICEK
-                              </Badge>
+                              <span className="inline-flex items-center text-xs font-mono text-amber-400">
+                                <AlertCircle className="h-3.5 w-3.5 mr-1" /> BELUM DICEK
+                              </span>
                             )}
-                          </TableCell>
-                          <TableCell className="text-center py-4">
-                            <Button
-                              size="sm"
-                              onClick={() => handleScanLocation(loc.id)}
-                              disabled={loc.isCheckedToday}
-                              className={`rounded-xl font-mono text-xs px-4 py-2 transition-all duration-300 ${
-                                loc.isCheckedToday 
-                                  ? "bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed" 
-                                  : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]"
-                              }`}
-                            >
-                              {loc.isCheckedToday ? "COMPLETED" : "SCAN QR"}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        onClick={() => handleScanLocation(loc.id)}
+                        disabled={loc.isCheckedToday}
+                        className={`rounded-xl px-4 font-mono text-xs uppercase tracking-wider transition-all duration-200 ${
+                          loc.isCheckedToday 
+                            ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed' 
+                            : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]'
+                        }`}
+                      >
+                        {loc.isCheckedToday ? "Selesai" : "Mulai Cek"}
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
             </>

@@ -10,7 +10,7 @@ import LocationForm from '@/components/LocationForm';
 import LocationList from '@/components/LocationList';
 import SatpamSchedule from '@/components/SatpamSchedule';
 import { toast } from 'sonner';
-import { Cpu, Users, MapPin, CalendarRange } from 'lucide-react';
+import { Cpu, Users, MapPin, Calendar, Shield } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { session, loading } = useSession();
@@ -31,8 +31,10 @@ const AdminDashboard = () => {
 
         if (error) {
           if (error.code === 'PGRST204') {
+            console.warn("No profile found for user, redirecting from Admin Dashboard.");
             toast.error("Akses ditolak. Profil tidak ditemukan atau Anda bukan admin.");
           } else {
+            console.error("Error fetching profile role:", error);
             toast.error("Gagal memuat peran pengguna.");
           }
           navigate('/');
@@ -82,7 +84,7 @@ const AdminDashboard = () => {
           <div className="flex items-center space-x-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 p-[1px] shadow-[0_0_15px_rgba(59,130,246,0.3)]">
               <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-950">
-                <Cpu className="h-6 w-6 text-cyan-400" />
+                <Shield className="h-6 w-6 text-cyan-400" />
               </div>
             </div>
             <div>
@@ -113,7 +115,7 @@ const AdminDashboard = () => {
                 value="schedule" 
                 className="rounded-xl font-mono text-xs uppercase tracking-wider py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-500 data-[state=active]:text-white transition-all duration-300"
               >
-                <CalendarRange className="mr-2 h-4 w-4 inline" />
+                <Calendar className="mr-2 h-4 w-4 inline" />
                 Penjadwalan
               </TabsTrigger>
             </TabsList>

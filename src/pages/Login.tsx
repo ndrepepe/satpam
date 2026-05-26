@@ -2,13 +2,12 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useSession } from '@/integrations/supabase/SessionContext';
-import { ShieldAlert, Cpu } from 'lucide-react';
+import { ShieldAlert, Cpu, Shield } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { session, loading } = useSession();
 
   useEffect(() => {
