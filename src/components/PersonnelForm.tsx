@@ -19,7 +19,7 @@ const personnelSchema = z.object({
 type PersonnelFormValues = z.infer<typeof personnelSchema>;
 
 interface PersonnelFormProps {
-  onPersonnelAdded: () => void; // New prop for callback
+  onPersonnelAdded: () => void;
 }
 
 const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
@@ -54,7 +54,7 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
 
       toast.success(`Personel ${values.first_name} ${values.last_name} berhasil ditambahkan!`);
       form.reset();
-      onPersonnelAdded(); // Call the callback to refresh the list
+      onPersonnelAdded();
     } catch (error: any) {
       toast.error(`Gagal menambahkan personel: ${error.message}`);
       console.error("Error adding personnel:", error);
@@ -63,73 +63,109 @@ const PersonnelForm: React.FC<PersonnelFormProps> = ({ onPersonnelAdded }) => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="first_name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nama Depan</FormLabel>
-              <FormControl>
-                <Input placeholder="Nama Depan" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="last_name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nama Belakang</FormLabel>
-              <FormControl>
-                <Input placeholder="Nama Belakang" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <FormField
+            control={form.control}
+            name="first_name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Nama Depan</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Masukkan nama depan" 
+                    {...field} 
+                    className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                  />
+                </FormControl>
+                <FormMessage className="text-red-400 text-xs font-mono" />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="last_name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Nama Belakang</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Masukkan nama belakang" 
+                    {...field} 
+                    className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                  />
+                </FormControl>
+                <FormMessage className="text-red-400 text-xs font-mono" />
+              </FormItem>
+            )}
+          />
+        </div>
+
         <FormField
           control={form.control}
           name="id_number"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nomor ID</FormLabel>
+              <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Nomor ID</FormLabel>
               <FormControl>
-                <Input placeholder="Nomor ID" {...field} autoComplete="off" />
+                <Input 
+                  placeholder="Masukkan nomor ID satpam" 
+                  {...field} 
+                  autoComplete="off" 
+                  className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                />
               </FormControl>
-              <FormMessage />
+              <FormMessage className="text-red-400 text-xs font-mono" />
             </FormItem>
           )}
         />
+
         <FormField
           control={form.control}
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="Email" {...field} autoComplete="off" />
+                <Input 
+                  type="email" 
+                  placeholder="contoh@satpam.com" 
+                  {...field} 
+                  autoComplete="off" 
+                  className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                />
               </FormControl>
-              <FormMessage />
+              <FormMessage className="text-red-400 text-xs font-mono" />
             </FormItem>
           )}
         />
+
         <FormField
           control={form.control}
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel className="text-slate-200 font-mono text-xs uppercase tracking-wider font-semibold">Password</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Password" {...field} autoComplete="new-password" />
+                <Input 
+                  type="password" 
+                  placeholder="Minimal 6 karakter" 
+                  {...field} 
+                  autoComplete="new-password" 
+                  className="bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 rounded-xl py-5"
+                />
               </FormControl>
-              <FormMessage />
+              <FormMessage className="text-red-400 text-xs font-mono" />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full">Tambah Personel</Button>
+
+        <Button 
+          type="submit" 
+          className="w-full py-6 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-mono uppercase tracking-wider font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all duration-300"
+        >
+          Tambah Personel
+        </Button>
       </form>
     </Form>
   );

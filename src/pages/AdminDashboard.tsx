@@ -77,7 +77,7 @@ const AdminDashboard = () => {
       {/* Glowing background aura */}
       <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-500 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
 
-      <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/60 backdrop-blur-2xl shadow-2xl overflow-hidden">
+      <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/80 backdrop-blur-2xl shadow-2xl overflow-hidden">
         <CardHeader className="border-b border-slate-800/80 pb-6">
           <div className="flex items-center space-x-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 p-[1px] shadow-[0_0_15px_rgba(59,130,246,0.3)]">
@@ -94,7 +94,7 @@ const AdminDashboard = () => {
         
         <CardContent className="pt-6">
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-1.5">
+            <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5">
               <TabsTrigger 
                 value="personnel" 
                 className="rounded-xl font-mono text-xs uppercase tracking-wider py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-500 data-[state=active]:text-white transition-all duration-300"
@@ -119,28 +119,30 @@ const AdminDashboard = () => {
             </TabsList>
 
             <TabsContent value="personnel" className="mt-6 space-y-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider">Tambah Personel Satpam Baru</h3>
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
+                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Tambah Personel Satpam Baru</h3>
                 <PersonnelForm onPersonnelAdded={handlePersonnelAdded} />
               </div>
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
+                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Daftar Personel Aktif</h3>
                 <PersonnelList isAdmin={isAdmin} refreshKey={personnelListRefreshKey} />
               </div>
             </TabsContent>
 
             <TabsContent value="locations" className="mt-6 space-y-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider">Buat Lokasi Baru</h3>
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
+                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Buat Lokasi Baru</h3>
                 <LocationForm onLocationCreated={handleLocationCreated} />
               </div>
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
+                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Daftar Lokasi Terdaftar</h3>
                 <LocationList refreshKey={locationListRefreshKey} />
               </div>
             </TabsContent>
 
             <TabsContent value="schedule" className="mt-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider">Penjadwalan Satpam Cek Area</h3>
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
+                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Penjadwalan Satpam Cek Area</h3>
                 <SatpamSchedule />
               </div>
             </TabsContent>
