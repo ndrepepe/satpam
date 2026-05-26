@@ -32,7 +32,7 @@ const Navbar = () => {
               </div>
             </div>
             <span className="text-lg font-bold tracking-wider bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent">
-              SATPAM <span className="text-cyan-400 font-extrabold">HUD</span>
+              ANDI <span className="text-cyan-400 font-extrabold">OFFSET</span>
             </span>
           </Link>
 
