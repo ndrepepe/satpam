@@ -6,19 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PersonnelForm from '@/components/PersonnelForm';
 import PersonnelList from '@/components/PersonnelList';
-import LocationForm from '@/components/LocationForm';
-import LocationList from '@/components/LocationList';
-import SatpamSchedule from '@/components/SatpamSchedule';
-import AparAdmin from '@/pages/AparAdmin'; // Import halaman APAR Admin
-import { toast } from 'sonner';
-import { Cpu, Users, MapPin, Calendar, Shield, Flame } from 'lucide-react';
+import PatrolAdmin from '@/pages/PatrolAdmin'; // Import komponen baru
+import AparAdmin from '@/pages/AparAdmin';
+import { Cpu, Users, Shield, Flame, Map } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { session, loading } = useSession();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [locationListRefreshKey, setLocationListRefreshKey] = useState(0);
   const [personnelListRefreshKey, setPersonnelListRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -45,10 +41,6 @@ const AdminDashboard = () => {
 
     checkAdminStatus();
   }, [session, loading, navigate]);
-
-  const handleLocationCreated = () => {
-    setLocationListRefreshKey(prevKey => prevKey + 1);
-  };
 
   const handlePersonnelAdded = () => {
     setPersonnelListRefreshKey(prevKey => prevKey + 1);
@@ -88,15 +80,12 @@ const AdminDashboard = () => {
         
         <CardContent className="pt-6">
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5">
+            <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5">
               <TabsTrigger value="personnel" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
                 <Users className="mr-2 h-4 w-4 hidden md:inline" /> Personel
               </TabsTrigger>
-              <TabsTrigger value="locations" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
-                <MapPin className="mr-2 h-4 w-4 hidden md:inline" /> Area
-              </TabsTrigger>
-              <TabsTrigger value="schedule" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
-                <Calendar className="mr-2 h-4 w-4 hidden md:inline" /> Jadwal
+              <TabsTrigger value="patrol" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
+                <Map className="mr-2 h-4 w-4 hidden md:inline" /> Patroli
               </TabsTrigger>
               <TabsTrigger value="apar" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-orange-600">
                 <Flame className="mr-2 h-4 w-4 hidden md:inline" /> APAR
@@ -108,13 +97,8 @@ const AdminDashboard = () => {
               <PersonnelList isAdmin={isAdmin} refreshKey={personnelListRefreshKey} />
             </TabsContent>
 
-            <TabsContent value="locations" className="mt-6 space-y-6 animate-fade-in">
-              <LocationForm onLocationCreated={handleLocationCreated} />
-              <LocationList refreshKey={locationListRefreshKey} />
-            </TabsContent>
-
-            <TabsContent value="schedule" className="mt-6 animate-fade-in">
-              <SatpamSchedule />
+            <TabsContent value="patrol" className="mt-6 animate-fade-in">
+              <PatrolAdmin />
             </TabsContent>
 
             <TabsContent value="apar" className="mt-6 animate-fade-in">
