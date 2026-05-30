@@ -9,8 +9,9 @@ import PersonnelList from '@/components/PersonnelList';
 import LocationForm from '@/components/LocationForm';
 import LocationList from '@/components/LocationList';
 import SatpamSchedule from '@/components/SatpamSchedule';
+import AparAdmin from '@/pages/AparAdmin'; // Import halaman APAR Admin
 import { toast } from 'sonner';
-import { Cpu, Users, MapPin, Calendar, Shield } from 'lucide-react';
+import { Cpu, Users, MapPin, Calendar, Shield, Flame } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { session, loading } = useSession();
@@ -30,18 +31,10 @@ const AdminDashboard = () => {
           .single();
 
         if (error) {
-          if (error.code === 'PGRST204') {
-            console.warn("No profile found for user, redirecting from Admin Dashboard.");
-            toast.error("Akses ditolak. Profil tidak ditemukan atau Anda bukan admin.");
-          } else {
-            console.error("Error fetching profile role:", error);
-            toast.error("Gagal memuat peran pengguna.");
-          }
           navigate('/');
         } else if (data?.role === 'admin') {
           setIsAdmin(true);
         } else {
-          toast.error("Akses ditolak. Anda bukan admin.");
           navigate('/');
         }
         setProfileLoading(false);
@@ -76,7 +69,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto relative group">
-      {/* Glowing background aura */}
       <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-500 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
 
       <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/80 backdrop-blur-2xl shadow-2xl overflow-hidden">
@@ -96,57 +88,37 @@ const AdminDashboard = () => {
         
         <CardContent className="pt-6">
           <Tabs defaultValue="personnel" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5">
-              <TabsTrigger 
-                value="personnel" 
-                className="rounded-xl font-mono text-xs uppercase tracking-wider py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-500 data-[state=active]:text-white transition-all duration-300"
-              >
-                <Users className="mr-2 h-4 w-4 inline" />
-                Personel
+            <TabsList className="grid w-full grid-cols-4 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5">
+              <TabsTrigger value="personnel" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
+                <Users className="mr-2 h-4 w-4 hidden md:inline" /> Personel
               </TabsTrigger>
-              <TabsTrigger 
-                value="locations" 
-                className="rounded-xl font-mono text-xs uppercase tracking-wider py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-500 data-[state=active]:text-white transition-all duration-300"
-              >
-                <MapPin className="mr-2 h-4 w-4 inline" />
-                Lokasi
+              <TabsTrigger value="locations" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
+                <MapPin className="mr-2 h-4 w-4 hidden md:inline" /> Area
               </TabsTrigger>
-              <TabsTrigger 
-                value="schedule" 
-                className="rounded-xl font-mono text-xs uppercase tracking-wider py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-500 data-[state=active]:text-white transition-all duration-300"
-              >
-                <Calendar className="mr-2 h-4 w-4 inline" />
-                Penjadwalan
+              <TabsTrigger value="schedule" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-blue-600">
+                <Calendar className="mr-2 h-4 w-4 hidden md:inline" /> Jadwal
+              </TabsTrigger>
+              <TabsTrigger value="apar" className="rounded-xl font-mono text-[10px] md:text-xs uppercase py-3 data-[state=active]:bg-orange-600">
+                <Flame className="mr-2 h-4 w-4 hidden md:inline" /> APAR
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="personnel" className="mt-6 space-y-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Tambah Personel Satpam Baru</h3>
-                <PersonnelForm onPersonnelAdded={handlePersonnelAdded} />
-              </div>
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Daftar Personel Aktif</h3>
-                <PersonnelList isAdmin={isAdmin} refreshKey={personnelListRefreshKey} />
-              </div>
+              <PersonnelForm onPersonnelAdded={handlePersonnelAdded} />
+              <PersonnelList isAdmin={isAdmin} refreshKey={personnelListRefreshKey} />
             </TabsContent>
 
             <TabsContent value="locations" className="mt-6 space-y-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Buat Lokasi Baru</h3>
-                <LocationForm onLocationCreated={handleLocationCreated} />
-              </div>
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Daftar Lokasi Terdaftar</h3>
-                <LocationList refreshKey={locationListRefreshKey} />
-              </div>
+              <LocationForm onLocationCreated={handleLocationCreated} />
+              <LocationList refreshKey={locationListRefreshKey} />
             </TabsContent>
 
             <TabsContent value="schedule" className="mt-6 animate-fade-in">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-inner">
-                <h3 className="text-lg font-bold text-white mb-4 font-mono uppercase tracking-wider border-b border-slate-800/50 pb-2">Penjadwalan Satpam Cek Area</h3>
-                <SatpamSchedule />
-              </div>
+              <SatpamSchedule />
+            </TabsContent>
+
+            <TabsContent value="apar" className="mt-6 animate-fade-in">
+              <AparAdmin />
             </TabsContent>
           </Tabs>
         </CardContent>
