@@ -6,6 +6,7 @@ import AparLocationForm from '@/components/AparLocationForm';
 import AparLocationList from '@/components/AparLocationList';
 import AparScheduleForm from '@/components/AparScheduleForm';
 import AparBulkUpload from '@/components/AparBulkUpload'; // Import baru
+import AparScheduleList from '@/components/AparScheduleList'; // Import list jadwal
 
 const AparAdmin = () => {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -48,6 +49,7 @@ const AparAdmin = () => {
             <TabsContent value="schedules" className="mt-6 space-y-6 animate-fade-in">
               <AparScheduleForm onScheduleCreated={handleRefresh} />
               <AparBulkUpload onUploadSuccess={handleRefresh} /> {/* Komponen Baru */}
+              <AparScheduleList refreshKey={refreshKey} /> {/* Menampilkan daftar jadwal cek APAR */}
               <div className="p-8 text-center border border-dashed border-slate-800 rounded-2xl text-slate-500 font-mono text-sm">
                 Sistem penjadwalan APAR aktif. Petugas akan menerima daftar tugas di Dashboard Satpam.
               </div>
