@@ -27,7 +27,7 @@ if (!accessKeyId || !secretAccessKey) {
   );
 }
 
-// Inisialisasi S3 Client untuk Backblaze B2
+// Inisialisasi S3 Client untuk Backblaze B2 dengan forcePathStyle diaktifkan
 const s3Client = new S3Client({
   endpoint: B2_ENDPOINT,
   region: B2_REGION,
@@ -35,6 +35,7 @@ const s3Client = new S3Client({
     accessKeyId: accessKeyId || "",
     secretAccessKey: secretAccessKey || "",
   },
+  forcePathStyle: true, // WAJIB UNTUK BACKBLAZE B2 DI BROWSER AGAR TIDAK TERKENA CORS/DNS SUBDOMAIN
 });
 
 export const uploadToBackblaze = async (
@@ -58,9 +59,9 @@ export const uploadToBackblaze = async (
 
   try {
     await s3Client.send(command);
-    // Mengembalikan URL publik dasar (yang nantinya akan diubah menjadi presigned URL saat diakses)
+    // Mengembalikan URL publik dengan format path-style yang aman dan konsisten
     const cleanEndpoint = B2_ENDPOINT.replace("https://", "").replace("http://", "");
-    return `https://${bucketName}.${cleanEndpoint}/${fileName}`;
+    return `https://${cleanEndpoint}/${bucketName}/${fileName}`;
   } catch (error: any) {
     console.error("[Backblaze B2] Error detail saat upload:", error);
     throw new Error(
@@ -77,15 +78,19 @@ export const getPresignedUrl = async (fileUrl: string): Promise<string> => {
   if (!fileUrl) return "";
   try {
     const urlObj = new URL(fileUrl);
-    // Mengambil path file (misal: uploads/user/file.jpg) dan menghapus slash di depan
-    const key = decodeURIComponent(urlObj.pathname.substring(1));
+    let key = decodeURIComponent(urlObj.pathname.substring(1));
+
+    // Jika URL menggunakan format path-style (misal: /cekarea/uploads/...), hapus nama bucket dari key
+    if (key.startsWith(`${bucketName}/`)) {
+      key = key.substring(bucketName.length + 1);
+    }
 
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
     });
 
-    // Buat tautan bertanda tangan yang berlaku selama 3600 detik (1 jam) dengan casting s3Client dan command ke any
+    // Buat tautan bertanda tangan yang berlaku selama 3600 detik (1 jam)
     const signedUrl = await getSignedUrl(s3Client as any, command as any, { expiresIn: 3600 });
     return signedUrl;
   } catch (error) {
