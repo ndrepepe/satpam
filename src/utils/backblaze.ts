@@ -85,8 +85,8 @@ export const getPresignedUrl = async (fileUrl: string): Promise<string> => {
       Key: key,
     });
 
-    // Buat tautan bertanda tangan yang berlaku selama 3600 detik (1 jam)
-    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    // Buat tautan bertanda tangan yang berlaku selama 3600 detik (1 jam) dengan casting s3Client dan command ke any
+    const signedUrl = await getSignedUrl(s3Client as any, command as any, { expiresIn: 3600 });
     return signedUrl;
   } catch (error) {
     console.error("[Backblaze B2] Gagal membuat presigned URL:", error);
