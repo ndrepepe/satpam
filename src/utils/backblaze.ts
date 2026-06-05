@@ -2,8 +2,9 @@
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const B2_ENDPOINT = "https://s3.ca-east-006.backblazeb2.com";
-const B2_REGION = "ca-east-006";
+// Membaca konfigurasi dari .env dengan fallback ke ca-east-006 jika tidak diisi
+const B2_ENDPOINT = import.meta.env.VITE_B2_ENDPOINT || "https://s3.ca-east-006.backblazeb2.com";
+const B2_REGION = import.meta.env.VITE_B2_REGION || "ca-east-006";
 
 const accessKeyId = import.meta.env.VITE_B2_ACCESS_KEY_ID;
 const secretAccessKey = import.meta.env.VITE_B2_SECRET_ACCESS_KEY;
@@ -46,7 +47,9 @@ export const uploadToBackblaze = async (
 
   try {
     await s3Client.send(command);
-    return `https://${bucketName}.s3.ca-east-006.backblazeb2.com/${fileName}`;
+    // Mengembalikan URL publik yang sesuai dengan endpoint yang digunakan
+    const cleanEndpoint = B2_ENDPOINT.replace("https://", "");
+    return `https://${bucketName}.${cleanEndpoint}/${fileName}`;
   } catch (error: any) {
     console.error("[Backblaze B2] Error detail saat upload:", error);
     throw new Error(
