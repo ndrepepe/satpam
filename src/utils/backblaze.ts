@@ -2,13 +2,23 @@
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-// Membaca konfigurasi dari .env dengan fallback ke ca-east-006 jika tidak diisi
-const B2_ENDPOINT = import.meta.env.VITE_B2_ENDPOINT || "https://s3.ca-east-006.backblazeb2.com";
-const B2_REGION = import.meta.env.VITE_B2_REGION || "ca-east-006";
+// Mengambil dan membersihkan nilai endpoint dari .env
+let rawEndpoint = import.meta.env.VITE_B2_ENDPOINT?.trim() || "";
+if (!rawEndpoint) {
+  rawEndpoint = "https://s3.ca-east-006.backblazeb2.com";
+} else {
+  // Jika user lupa memasukkan protokol http/https, tambahkan secara otomatis
+  if (!rawEndpoint.startsWith("http://") && !rawEndpoint.startsWith("https://")) {
+    rawEndpoint = `https://${rawEndpoint}`;
+  }
+}
 
-const accessKeyId = import.meta.env.VITE_B2_ACCESS_KEY_ID;
-const secretAccessKey = import.meta.env.VITE_B2_SECRET_ACCESS_KEY;
-const bucketName = import.meta.env.VITE_B2_BUCKET_NAME || "satpam";
+const B2_ENDPOINT = rawEndpoint;
+const B2_REGION = import.meta.env.VITE_B2_REGION?.trim() || "ca-east-006";
+
+const accessKeyId = import.meta.env.VITE_B2_ACCESS_KEY_ID?.trim();
+const secretAccessKey = import.meta.env.VITE_B2_SECRET_ACCESS_KEY?.trim();
+const bucketName = import.meta.env.VITE_B2_BUCKET_NAME?.trim() || "satpam";
 
 if (!accessKeyId || !secretAccessKey) {
   console.warn(
@@ -48,7 +58,7 @@ export const uploadToBackblaze = async (
   try {
     await s3Client.send(command);
     // Mengembalikan URL publik yang sesuai dengan endpoint yang digunakan
-    const cleanEndpoint = B2_ENDPOINT.replace("https://", "");
+    const cleanEndpoint = B2_ENDPOINT.replace("https://", "").replace("http://", "");
     return `https://${bucketName}.${cleanEndpoint}/${fileName}`;
   } catch (error: any) {
     console.error("[Backblaze B2] Error detail saat upload:", error);
