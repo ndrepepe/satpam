@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 interface Schedule {
   id: string;
   schedule_date: string;
   status: 'pending' | 'completed' | 'overdue';
+  user_id: string;
+  apar_location_id: string;
   profiles: {
     first_name: string;
     last_name: string;
@@ -38,21 +39,55 @@ const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
   const fetchSchedules = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Ambil data jadwal APAR
+      const { data: rawSchedules, error: schedulesError } = await supabase
         .from('apar_schedules')
-        .select(`
-          id,
-          schedule_date,
-          status,
-          profiles (first_name, last_name),
-          apar_locations (name, type, posisi_gedung)
-        `)
+        .select('id, schedule_date, status, user_id, apar_location_id')
         .order('schedule_date', { ascending: false });
 
-      if (error) throw error;
-      if (data) {
-        setSchedules(data as any);
+      if (schedulesError) throw schedulesError;
+
+      if (!rawSchedules || rawSchedules.length === 0) {
+        setSchedules([]);
+        setLoading(false);
+        return;
       }
+
+      // 2. Ambil data profiles satpam
+      const { data: rawProfiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name');
+
+      if (profilesError) throw profilesError;
+
+      // 3. Ambil data lokasi APAR
+      const { data: rawAparLocations, error: aparLocationsError } = await supabase
+        .from('apar_locations')
+        .select('id, name, type, posisi_gedung');
+
+      if (aparLocationsError) throw aparLocationsError;
+
+      // Buat map untuk pencarian cepat
+      const profilesMap = new Map(rawProfiles?.map(p => [p.id, p]));
+      const aparLocationsMap = new Map(rawAparLocations?.map(a => [a.id, a]));
+
+      // 4. Gabungkan data di memori (In-Memory Join)
+      const joinedData: Schedule[] = rawSchedules.map(schedule => {
+        const profile = profilesMap.get(schedule.user_id);
+        const aparLocation = aparLocationsMap.get(schedule.apar_location_id);
+
+        return {
+          id: schedule.id,
+          schedule_date: schedule.schedule_date,
+          status: schedule.status,
+          user_id: schedule.user_id,
+          apar_location_id: schedule.apar_location_id,
+          profiles: profile ? { first_name: profile.first_name, last_name: profile.last_name } : null,
+          apar_locations: aparLocation ? { name: aparLocation.name, type: aparLocation.type, posisi_gedung: aparLocation.posisi_gedung } : null
+        };
+      });
+
+      setSchedules(joinedData);
     } catch (error: any) {
       toast.error(`Gagal memuat jadwal dari database: ${error.message}`);
     } finally {
