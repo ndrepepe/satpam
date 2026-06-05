@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { Flame, CheckCircle, AlertTriangle, XCircle, Camera, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { uploadToBackblaze } from '@/utils/backblaze';
 
 const AparReport = () => {
   const [searchParams] = useSearchParams();
@@ -67,26 +68,11 @@ const AparReport = () => {
       const fileExt = compressedBlob.type.split('/')[1] || 'jpg';
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.${fileExt}`;
-      const bucketName = 'satpam';
 
-      // 2. Unggah foto langsung ke Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(filename, compressedBlob, {
-          contentType: compressedBlob.type,
-          upsert: false,
-        });
+      // 2. Unggah foto selfie ke Backblaze B2
+      const publicUrl = await uploadToBackblaze(compressedBlob, filename, compressedBlob.type);
 
-      if (uploadError) {
-        throw new Error(`Gagal mengunggah foto ke Storage: ${uploadError.message}`);
-      }
-
-      // 3. Dapatkan URL publik foto
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filename);
-
-      // 4. Simpan laporan ke database (termasuk photo_url)
+      // 3. Simpan laporan ke database (termasuk photo_url Backblaze B2)
       const { error } = await supabase.from('apar_reports').insert({
         apar_location_id: aparId,
         user_id: user.id,
@@ -97,7 +83,7 @@ const AparReport = () => {
 
       if (error) throw error;
 
-      // 5. Update status jadwal jika ada
+      // 4. Update status jadwal jika ada
       const today = new Date().toISOString().split('T')[0];
       await supabase.from('apar_schedules')
         .update({ status: 'completed' })

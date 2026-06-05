@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Camera, MapPin, UploadCloud, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { uploadToBackblaze } from '@/utils/backblaze';
 
 const CheckAreaReport = () => {
   const [searchParams] = useSearchParams();
@@ -69,26 +70,11 @@ const CheckAreaReport = () => {
       const fileExt = compressedBlob.type.split('/')[1] || 'jpg';
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `uploads/${user.id}/${locationId}-${timestamp}.${fileExt}`;
-      const bucketName = 'satpam';
 
-      // Unggah langsung ke Supabase Storage dari sisi klien (menghindari Edge Function)
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(filename, compressedBlob, {
-          contentType: compressedBlob.type,
-          upsert: false,
-        });
+      // Unggah foto selfie ke Backblaze B2
+      const publicUrl = await uploadToBackblaze(compressedBlob, filename, compressedBlob.type);
 
-      if (uploadError) {
-        throw new Error(`Gagal mengunggah foto ke Storage: ${uploadError.message}`);
-      }
-
-      // Dapatkan URL publik
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filename);
-
-      // Simpan laporan ke database
+      // Simpan laporan ke database dengan URL foto Backblaze B2
       const { error: insertError } = await supabase.from('check_area_reports').insert({
         user_id: user.id,
         location_id: locationId,
