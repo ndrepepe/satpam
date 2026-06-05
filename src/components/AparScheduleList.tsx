@@ -1,21 +1,28 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, Clock, AlertTriangle, Trash2, Search, Filter } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Calendar, CheckCircle2, Clock, AlertTriangle, Trash2, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 interface Schedule {
   id: string;
-  aparId: string;
-  aparName?: string;
-  location?: string;
-  dueDate: string;
-  assignedTo: string;
+  schedule_date: string;
   status: 'pending' | 'completed' | 'overdue';
-  notes?: string;
+  profiles: {
+    first_name: string;
+    last_name: string;
+  } | null;
+  apar_locations: {
+    name: string;
+    type: string;
+    posisi_gedung: string;
+  } | null;
 }
 
 interface AparScheduleListProps {
@@ -24,61 +31,55 @@ interface AparScheduleListProps {
 
 const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  useEffect(() => {
-    // Load schedules from localStorage
-    const storedSchedules = localStorage.getItem('apar_schedules');
-    if (storedSchedules) {
-      try {
-        setSchedules(JSON.parse(storedSchedules));
-      } catch (e) {
-        console.error("Error parsing schedules", e);
+  const fetchSchedules = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('apar_schedules')
+        .select(`
+          id,
+          schedule_date,
+          status,
+          profiles (first_name, last_name),
+          apar_locations (name, type, posisi_gedung)
+        `)
+        .order('schedule_date', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setSchedules(data as any);
       }
-    } else {
-      // Fallback mock data if empty
-      const mockSchedules: Schedule[] = [
-        {
-          id: '1',
-          aparId: 'APAR-001',
-          aparName: 'APAR Powder 6kg',
-          location: 'Lobby Utama - Lantai 1',
-          dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0], // 2 days from now
-          assignedTo: 'Budi Santoso',
-          status: 'pending',
-          notes: 'Pengecekan rutin bulanan tekanan & segel'
-        },
-        {
-          id: '2',
-          aparId: 'APAR-002',
-          aparName: 'APAR CO2 5kg',
-          location: 'Ruang Server - Lantai 2',
-          dueDate: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0], // 3 days ago
-          assignedTo: 'Andi Wijaya',
-          status: 'overdue',
-          notes: 'Segera cek kondisi tabung dan nozzle'
-        },
-        {
-          id: '3',
-          aparId: 'APAR-003',
-          aparName: 'APAR Foam 9L',
-          location: 'Kantin Belakang',
-          dueDate: new Date(Date.now() - 86400000 * 10).toISOString().split('T')[0],
-          assignedTo: 'Budi Santoso',
-          status: 'completed',
-          notes: 'Selesai diperiksa, kondisi prima'
-        }
-      ];
-      localStorage.setItem('apar_schedules', JSON.stringify(mockSchedules));
-      setSchedules(mockSchedules);
+    } catch (error: any) {
+      toast.error(`Gagal memuat jadwal dari database: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchSchedules();
   }, [refreshKey]);
 
-  const handleDelete = (id: string) => {
-    const updated = schedules.filter(s => s.id !== id);
-    setSchedules(updated);
-    localStorage.setItem('apar_schedules', JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Apakah Anda yakin ingin menghapus jadwal pemeriksaan ini?")) {
+      try {
+        const { error } = await supabase
+          .from('apar_schedules')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+
+        toast.success("Jadwal pemeriksaan berhasil dihapus.");
+        fetchSchedules();
+      } catch (error: any) {
+        toast.error(`Gagal menghapus jadwal: ${error.message}`);
+      }
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -105,10 +106,16 @@ const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
   };
 
   const filteredSchedules = schedules.filter(schedule => {
+    const aparName = schedule.apar_locations?.name || '';
+    const aparType = schedule.apar_locations?.type || '';
+    const location = schedule.apar_locations?.posisi_gedung || '';
+    const staffName = schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : '';
+
     const matchesSearch = 
-      (schedule.aparId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (schedule.location?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (schedule.assignedTo?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      aparName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      aparType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      staffName.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || schedule.status === statusFilter;
 
@@ -122,9 +129,9 @@ const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
           <div>
             <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Calendar className="h-5 w-5 text-orange-500" />
-              Daftar Jadwal Pemeriksaan APAR
+              Daftar Jadwal Pemeriksaan APAR (Database)
             </CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Memantau jadwal pengecekan aktif dan riwayat pemeriksaan</p>
+            <p className="text-xs text-slate-400 mt-1">Memantau jadwal pengecekan aktif langsung dari Supabase</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -163,23 +170,19 @@ const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
               >
                 Selesai
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatusFilter('overdue')}
-                className={`h-7 px-2.5 text-xs rounded-lg font-mono uppercase ${statusFilter === 'overdue' ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'text-slate-400 hover:text-white'}`}
-              >
-                Terlambat
-              </Button>
             </div>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-0">
-        {filteredSchedules.length === 0 ? (
+        {loading ? (
+          <div className="p-12 text-center text-slate-400 font-mono text-sm">
+            Memuat data jadwal dari Supabase...
+          </div>
+        ) : filteredSchedules.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-mono text-sm">
-            Tidak ada jadwal pemeriksaan yang ditemukan.
+            Tidak ada jadwal pemeriksaan yang ditemukan di database.
           </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
@@ -187,35 +190,33 @@ const AparScheduleList: React.FC<AparScheduleListProps> = ({ refreshKey }) => {
               <div key={schedule.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-900/20 transition-colors">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-bold text-orange-400">{schedule.aparId}</span>
-                    {schedule.aparName && (
-                      <span className="text-xs text-slate-300 font-medium">({schedule.aparName})</span>
+                    <span className="font-mono text-sm font-bold text-orange-400">
+                      {schedule.apar_locations?.name || 'APAR Tidak Diketahui'}
+                    </span>
+                    {schedule.apar_locations?.type && (
+                      <span className="text-xs text-slate-300 font-medium">({schedule.apar_locations.type})</span>
                     )}
                     {getStatusBadge(schedule.status)}
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400">
-                    {schedule.location && (
+                    {schedule.apar_locations?.posisi_gedung && (
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-500">Lokasi:</span>
-                        <span className="text-slate-300">{schedule.location}</span>
+                        <span className="text-slate-500">Gedung:</span>
+                        <span className="text-slate-300">{schedule.apar_locations.posisi_gedung}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-1">
                       <span className="text-slate-500">Petugas:</span>
-                      <span className="text-slate-300 font-medium">{schedule.assignedTo}</span>
+                      <span className="text-slate-300 font-medium">
+                        {schedule.profiles ? `${schedule.profiles.first_name} ${schedule.profiles.last_name}` : 'Belum Ditugaskan'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-slate-500">Batas Waktu:</span>
-                      <span className="text-slate-300 font-mono">{schedule.dueDate}</span>
+                      <span className="text-slate-500">Tanggal Cek:</span>
+                      <span className="text-slate-300 font-mono">{schedule.schedule_date}</span>
                     </div>
                   </div>
-
-                  {schedule.notes && (
-                    <p className="text-xs text-slate-500 italic mt-1">
-                      Catatan: {schedule.notes}
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex items-center justify-end">
