@@ -8,7 +8,6 @@ let rawEndpoint = import.meta.env.VITE_B2_ENDPOINT?.trim() || "";
 if (!rawEndpoint) {
   rawEndpoint = "https://s3.ca-east-006.backblazeb2.com";
 } else {
-  // Jika user lupa memasukkan protokol http/https, tambahkan secara otomatis
   if (!rawEndpoint.startsWith("http://") && !rawEndpoint.startsWith("https://")) {
     rawEndpoint = `https://${rawEndpoint}`;
   }
@@ -27,7 +26,7 @@ if (!accessKeyId || !secretAccessKey) {
   );
 }
 
-// Inisialisasi S3 Client untuk Backblaze B2 dengan forcePathStyle diaktifkan
+// Inisialisasi S3 Client untuk Backblaze B2
 const s3Client = new S3Client({
   endpoint: B2_ENDPOINT,
   region: B2_REGION,
@@ -35,7 +34,8 @@ const s3Client = new S3Client({
     accessKeyId: accessKeyId || "",
     secretAccessKey: secretAccessKey || "",
   },
-  forcePathStyle: true, // WAJIB UNTUK BACKBLAZE B2 DI BROWSER AGAR TIDAK TERKENA CORS/DNS SUBDOMAIN
+  forcePathStyle: true, // Wajib untuk browser
+  maxAttempts: 1,       // MENONAKTIFKAN RETRY: Jika gagal, langsung munculkan error tanpa loading lama
 });
 
 export const uploadToBackblaze = async (
@@ -59,20 +59,18 @@ export const uploadToBackblaze = async (
 
   try {
     await s3Client.send(command);
-    // Mengembalikan URL publik dengan format path-style yang aman dan konsisten
     const cleanEndpoint = B2_ENDPOINT.replace("https://", "").replace("http://", "");
     return `https://${cleanEndpoint}/${bucketName}/${fileName}`;
   } catch (error: any) {
     console.error("[Backblaze B2] Error detail saat upload:", error);
     throw new Error(
-      `Gagal mengunggah ke Backblaze B2. Pastikan aturan CORS di bucket Anda sudah diaktifkan. Detail: ${error.message}`
+      `Gagal mengunggah ke Backblaze B2. Pastikan aturan CORS di bucket Anda sudah diaktifkan dengan benar. Detail: ${error.message}`
     );
   }
 };
 
 /**
  * Menghasilkan tautan aman sementara (Presigned URL) untuk file di bucket private.
- * Berlaku selama 1 jam (3600 detik).
  */
 export const getPresignedUrl = async (fileUrl: string): Promise<string> => {
   if (!fileUrl) return "";
@@ -80,7 +78,6 @@ export const getPresignedUrl = async (fileUrl: string): Promise<string> => {
     const urlObj = new URL(fileUrl);
     let key = decodeURIComponent(urlObj.pathname.substring(1));
 
-    // Jika URL menggunakan format path-style (misal: /cekarea/uploads/...), hapus nama bucket dari key
     if (key.startsWith(`${bucketName}/`)) {
       key = key.substring(bucketName.length + 1);
     }
@@ -90,11 +87,10 @@ export const getPresignedUrl = async (fileUrl: string): Promise<string> => {
       Key: key,
     });
 
-    // Buat tautan bertanda tangan yang berlaku selama 3600 detik (1 jam)
     const signedUrl = await getSignedUrl(s3Client as any, command as any, { expiresIn: 3600 });
     return signedUrl;
   } catch (error) {
     console.error("[Backblaze B2] Gagal membuat presigned URL:", error);
-    return fileUrl; // Fallback ke URL asli jika gagal parse
+    return fileUrl;
   }
 };
