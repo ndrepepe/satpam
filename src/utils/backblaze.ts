@@ -18,7 +18,8 @@ const B2_REGION = import.meta.env.VITE_B2_REGION?.trim() || "ca-east-006";
 
 const accessKeyId = import.meta.env.VITE_B2_ACCESS_KEY_ID?.trim();
 const secretAccessKey = import.meta.env.VITE_B2_SECRET_ACCESS_KEY?.trim();
-const bucketName = import.meta.env.VITE_B2_BUCKET_NAME?.trim() || "satpam";
+// Mengubah default bucket name menjadi 'cekarea' sesuai screenshot user
+const bucketName = import.meta.env.VITE_B2_BUCKET_NAME?.trim() || "cekarea";
 
 if (!accessKeyId || !secretAccessKey) {
   console.warn(
