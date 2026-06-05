@@ -21,6 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import { getPresignedUrl } from '@/utils/backblaze';
 
 interface Location {
   id: string;
@@ -237,6 +238,16 @@ const SupervisorDashboard = () => {
     return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
   }, [schedules, reports, locationList, selectedDate]);
 
+  // Fungsi untuk membuat presigned URL secara dinamis dan membukanya di tab baru
+  const handleViewPhoto = async (photoUrl: string) => {
+    try {
+      const presignedUrl = await getPresignedUrl(photoUrl);
+      window.open(presignedUrl, '_blank', 'noopener,noreferrer');
+    } catch (error: any) {
+      toast.error("Gagal memuat foto laporan: " + error.message);
+    }
+  };
+
   // Calculate overall stats for the selected date
   const totalAssignedLocations = schedules.length;
   const totalCheckedLocations = reports.length;
@@ -411,15 +422,13 @@ const SupervisorDashboard = () => {
                               <TableCell className="text-slate-300 text-center py-4 font-mono">{status.lastCheckedAt || '-'}</TableCell>
                               <TableCell className="text-center py-4">
                                 {status.photoUrl ? (
-                                  <a 
-                                    href={status.photoUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="inline-flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 font-mono text-xs transition-colors duration-200"
+                                  <button 
+                                    onClick={() => handleViewPhoto(status.photoUrl!)}
+                                    className="inline-flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 font-mono text-xs transition-colors duration-200 bg-transparent border-none cursor-pointer"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                     <span>LIHAT FOTO</span>
-                                  </a>
+                                  </button>
                                 ) : (
                                   <span className="text-slate-500 font-mono">-</span>
                                 )}
