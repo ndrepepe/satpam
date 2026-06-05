@@ -29,7 +29,14 @@ const AparScan = () => {
 
   const handleScan = (result: any) => {
     if (result) {
-      if (result.text === expectedQr) {
+      const scannedText = result.text?.trim();
+      
+      // Verifikasi fleksibel: Cocok jika teks scan sama dengan URL lengkap, sama dengan ID, atau mengandung ID APAR tersebut
+      if (
+        scannedText === expectedQr || 
+        scannedText === aparId || 
+        (scannedText && scannedText.includes(aparId || ''))
+      ) {
         setStatus('success');
         toast.success("QR Code Valid!");
       } else {
