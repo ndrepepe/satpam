@@ -20,11 +20,15 @@ const accessKeyId = import.meta.env.VITE_B2_ACCESS_KEY_ID?.trim();
 const secretAccessKey = import.meta.env.VITE_B2_SECRET_ACCESS_KEY?.trim();
 const bucketName = import.meta.env.VITE_B2_BUCKET_NAME?.trim() || "cekarea";
 
-if (!accessKeyId || !secretAccessKey) {
-  console.warn(
-    "[Backblaze B2] Peringatan: Kredensial VITE_B2_ACCESS_KEY_ID atau VITE_B2_SECRET_ACCESS_KEY tidak ditemukan di file .env!"
-  );
-}
+// Log pelacak untuk membantu debugging di konsol browser (F12)
+console.log("[Backblaze B2] Memeriksa konfigurasi terpasang:", {
+  endpoint: B2_ENDPOINT,
+  region: B2_REGION,
+  bucket: bucketName,
+  hasAccessKey: !!accessKeyId,
+  hasSecretKey: !!secretAccessKey,
+  accessKeyLength: accessKeyId ? accessKeyId.length : 0
+});
 
 // Inisialisasi S3 Client untuk Backblaze B2
 const s3Client = new S3Client({
