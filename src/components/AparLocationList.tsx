@@ -14,6 +14,7 @@ interface AparLocation {
   type: string;
   posisi_gedung: string;
   created_at: string;
+  qr_code_data?: string;
 }
 
 const AparLocationList: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
@@ -48,9 +49,14 @@ const AparLocationList: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
     setIsQrOpen(true);
   };
 
+  const getQrDataValue = (apar: AparLocation) => {
+    if (apar.qr_code_data) return apar.qr_code_data;
+    return `${window.location.origin}/scan-apar?id=${apar.id}`;
+  };
+
   const handlePrint = () => {
-    const printContent = document.getElementById('printable-qr-area');
-    if (!printContent) return;
+    if (!selectedApar) return;
+    const qrData = getQrDataValue(selectedApar);
 
     const windowUrl = 'about:blank';
     const uniqueName = new Date().getTime();
@@ -60,7 +66,7 @@ const AparLocationList: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak QR Code - ${selectedApar?.name}</title>
+            <title>Cetak QR Code - ${selectedApar.name}</title>
             <style>
               body {
                 font-family: monospace;
@@ -106,11 +112,11 @@ const AparLocationList: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
             <div class="qr-container">
               <div class="title">APAR SAFETY QR</div>
               <div class="subtitle">SCAN UNTUK PEMERIKSAAN</div>
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(selectedApar?.id || '')}" />
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}" />
               <div class="info">
-                <strong>KODE:</strong> ${selectedApar?.name}<br/>
-                <strong>JENIS:</strong> ${selectedApar?.type}<br/>
-                <strong>LOKASI:</strong> ${selectedApar?.posisi_gedung}
+                <strong>KODE:</strong> ${selectedApar.name}<br/>
+                <strong>JENIS:</strong> ${selectedApar.type}<br/>
+                <strong>LOKASI:</strong> ${selectedApar.posisi_gedung}
               </div>
             </div>
             <script>
@@ -177,7 +183,7 @@ const AparLocationList: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
               {/* Tampilan QR Code */}
               <div id="printable-qr-area" className="bg-white p-6 rounded-2xl shadow-lg flex flex-col items-center border-4 border-orange-500">
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(selectedApar.id)}`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getQrDataValue(selectedApar))}`} 
                   alt={`QR Code ${selectedApar.name}`}
                   className="w-48 h-48"
                 />

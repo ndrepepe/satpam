@@ -27,20 +27,35 @@ const AparScan = () => {
     fetchApar();
   }, [aparId]);
 
-  const handleScan = (result: any) => {
+  const handleScan = (result: any, error: any) => {
     if (result) {
-      const scannedText = result.text?.trim();
-      
-      // Verifikasi fleksibel: Cocok jika teks scan sama dengan URL lengkap, sama dengan ID, atau mengandung ID APAR tersebut
-      if (
-        scannedText === expectedQr || 
-        scannedText === aparId || 
-        (scannedText && scannedText.includes(aparId || ''))
-      ) {
+      const scannedText = result.text?.trim().toLowerCase();
+      const targetId = aparId?.trim().toLowerCase();
+      const targetQr = expectedQr?.trim().toLowerCase();
+
+      if (!targetId) return;
+
+      // Verifikasi super fleksibel:
+      // 1. Teks scan sama persis dengan ID target
+      // 2. Teks scan sama persis dengan URL lengkap target
+      // 3. Teks scan mengandung ID target (misal scan URL lengkap tapi targetId adalah UUID)
+      const isValid = 
+        scannedText === targetId || 
+        scannedText === targetQr || 
+        (scannedText && scannedText.includes(targetId));
+
+      if (isValid) {
         setStatus('success');
         toast.success("QR Code Valid!");
       } else {
+        console.log("Scan Mismatch:", { scannedText, targetId, targetQr });
         toast.error("QR Code tidak cocok dengan APAR ini.");
+      }
+    }
+
+    if (error) {
+      if (error.name === 'NotAllowedError' || error.name === 'NotFoundError') {
+        toast.error("Akses kamera ditolak atau tidak ditemukan.");
       }
     }
   };
@@ -63,6 +78,7 @@ const AparScan = () => {
               <QrReader
                 onResult={handleScan}
                 constraints={{ facingMode: 'environment' }}
+                scanDelay={500}
                 videoContainerStyle={{ width: '100%', paddingTop: '100%' }}
                 videoStyle={{ objectFit: 'cover' }}
               />
