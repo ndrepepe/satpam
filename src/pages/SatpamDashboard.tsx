@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
-import { Shield, Search, MapPin, CheckCircle2, AlertCircle, Calendar, ShieldAlert } from 'lucide-react';
+import { Shield, Search, MapPin, CheckCircle2, AlertCircle, Calendar, ShieldAlert, Flame, Eye } from 'lucide-react';
 
 interface Location {
   id: string;
@@ -18,13 +19,29 @@ interface Location {
   isCheckedToday?: boolean;
 }
 
+interface AparTask {
+  id: string; // schedule id
+  apar_location_id: string;
+  name: string;
+  type: string;
+  posisi_gedung: string;
+  status: 'pending' | 'completed' | 'overdue';
+}
+
 const SatpamDashboard = () => {
   const { session, loading: sessionLoading, user } = useSession();
   const navigate = useNavigate();
+  
+  // State Patroli
   const [locations, setLocations] = useState<Location[]>([]);
-  const [loadingLocations, setLoadingLocations] = useState(true);
-  const [isSatpam, setIsSatpam] = useState(false);
   const [isScheduledToday, setIsScheduledToday] = useState(false);
+  
+  // State APAR
+  const [aparTasks, setAparTasks] = useState<AparTask[]>([]);
+  const [isAparScheduledToday, setIsAparScheduledToday] = useState(false);
+
+  const [loadingData, setLoadingData] = useState(true);
+  const [isSatpam, setIsSatpam] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentDateString, setCurrentDateString] = useState('');
 
@@ -37,7 +54,7 @@ const SatpamDashboard = () => {
       return;
     }
 
-    const checkUserRoleAndFetchLocations = async () => {
+    const checkUserRoleAndFetchData = async () => {
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -54,6 +71,7 @@ const SatpamDashboard = () => {
       if (profileData?.role === 'satpam') {
         setIsSatpam(true);
 
+        // Hitung tanggal tugas (GMT+7)
         const now = new Date();
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
         let targetCalendarDateForSchedule = new Date(currentGMT7Time);
@@ -66,6 +84,7 @@ const SatpamDashboard = () => {
         const formattedTargetScheduleDate = format(targetCalendarDateForSchedule, 'yyyy-MM-dd');
         setCurrentDateString(format(targetCalendarDateForSchedule, 'EEEE, dd MMMM yyyy'));
 
+        // ================= FETCH JADWAL PATROLI =================
         const { data: scheduleData, error: scheduleError } = await supabase
           .from('schedules')
           .select('location_id')
@@ -73,84 +92,120 @@ const SatpamDashboard = () => {
           .eq('schedule_date', formattedTargetScheduleDate);
 
         if (scheduleError) {
-          console.error("Error fetching schedule:", scheduleError);
-          toast.error("Gagal memuat jadwal Anda.");
-          setLoadingLocations(false);
-          return;
-        }
+          console.error("Error fetching patrol schedule:", scheduleError);
+          toast.error("Gagal memuat jadwal patroli.");
+        } else if (scheduleData && scheduleData.length > 0) {
+          setIsScheduledToday(true);
+          const scheduledLocationIds = scheduleData.map(s => s.location_id);
 
-        if (!scheduleData || scheduleData.length === 0) {
+          const { data: locationsData, error: locationsError } = await supabase
+            .from('locations')
+            .select('id, name, qr_code_data, created_at')
+            .in('id', scheduledLocationIds)
+            .order('name', { ascending: true });
+
+          if (!locationsError && locationsData) {
+            // Ambil laporan patroli hari ini
+            const localStartOfCheckingDayForReports = new Date(targetCalendarDateForSchedule.getFullYear(), targetCalendarDateForSchedule.getMonth(), targetCalendarDateForSchedule.getDate(), 6, 0, 0);
+            const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
+            const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
+
+            const { data: reportsData } = await supabase
+              .from('check_area_reports')
+              .select('location_id')
+              .eq('user_id', user.id)
+              .gte('created_at', startOfCheckingDayUTC)
+              .lt('created_at', endOfCheckingDayUTC);
+
+            const checkedLocationIds = new Set(reportsData?.map(report => report.location_id));
+            setLocations(locationsData.map(loc => ({
+              ...loc,
+              isCheckedToday: checkedLocationIds.has(loc.id),
+            })));
+          }
+        } else {
           setIsScheduledToday(false);
-          setLoadingLocations(false);
           setLocations([]);
-          return;
-        }
-        setIsScheduledToday(true);
-
-        const scheduledLocationIds = scheduleData.map(s => s.location_id);
-
-        const { data: locationsData, error: locationsError } = await supabase
-          .from('locations')
-          .select('id, name, qr_code_data, created_at')
-          .in('id', scheduledLocationIds)
-          .order('name', { ascending: true });
-
-        if (locationsError) {
-          console.error("Error fetching locations:", locationsError);
-          toast.error("Gagal memuat daftar lokasi.");
-          setLoadingLocations(false);
-          return;
         }
 
-        const localStartOfCheckingDayForReports = new Date(targetCalendarDateForSchedule.getFullYear(), targetCalendarDateForSchedule.getMonth(), targetCalendarDateForSchedule.getDate(), 6, 0, 0);
-        const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
-        const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
-
-        const { data: reportsData, error: reportsError } = await supabase
-          .from('check_area_reports')
-          .select('location_id, created_at')
+        // ================= FETCH JADWAL APAR =================
+        const { data: aparScheduleData, error: aparScheduleError } = await supabase
+          .from('apar_schedules')
+          .select('id, status, apar_location_id')
           .eq('user_id', user.id)
-          .gte('created_at', startOfCheckingDayUTC)
-          .lt('created_at', endOfCheckingDayUTC);
+          .eq('schedule_date', formattedTargetScheduleDate);
 
-        if (reportsError) {
-          console.error("Error fetching reports:", reportsError);
-          toast.error("Gagal memuat laporan cek area.");
-          setLoadingLocations(false);
-          return;
+        if (aparScheduleError) {
+          console.error("Error fetching APAR schedule:", aparScheduleError);
+          toast.error("Gagal memuat jadwal APAR.");
+        } else if (aparScheduleData && aparScheduleData.length > 0) {
+          setIsAparScheduledToday(true);
+          const aparLocationIds = aparScheduleData.map(s => s.apar_location_id);
+
+          const { data: aparLocationsData, error: aparLocationsError } = await supabase
+            .from('apar_locations')
+            .select('id, name, type, posisi_gedung')
+            .in('id', aparLocationIds);
+
+          if (!aparLocationsError && aparLocationsData) {
+            const mappedAparTasks: AparTask[] = aparScheduleData.map(sched => {
+              const loc = aparLocationsData.find(l => l.id === sched.apar_location_id);
+              return {
+                id: sched.id,
+                apar_location_id: sched.apar_location_id,
+                name: loc?.name || 'APAR Tidak Diketahui',
+                type: loc?.type || 'N/A',
+                posisi_gedung: loc?.posisi_gedung || 'N/A',
+                status: sched.status
+              };
+            });
+            setAparTasks(mappedAparTasks.sort((a, b) => a.name.localeCompare(b.name)));
+          }
+        } else {
+          setIsAparScheduledToday(false);
+          setAparTasks([]);
         }
 
-        const checkedLocationIds = new Set(reportsData?.map(report => report.location_id));
-
-        const locationsWithStatus = locationsData.map(loc => ({
-          ...loc,
-          isCheckedToday: checkedLocationIds.has(loc.id),
-        }));
-
-        setLocations(locationsWithStatus);
-        setLoadingLocations(false);
+        setLoadingData(false);
       } else {
         toast.error("Akses ditolak. Anda bukan satpam.");
         navigate('/');
       }
     };
 
-    checkUserRoleAndFetchLocations();
+    checkUserRoleAndFetchData();
   }, [session, sessionLoading, user, navigate]);
 
   const handleScanLocation = (locationId: string) => {
     navigate(`/scan-location?id=${locationId}`);
   };
 
+  const handleScanApar = (aparId: string) => {
+    navigate(`/scan-apar?id=${aparId}`);
+  };
+
+  // Filter pencarian
   const filteredLocations = locations.filter(loc =>
     loc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredAparTasks = aparTasks.filter(task =>
+    task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.posisi_gedung.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Progress Patroli
   const checkedCount = locations.filter(l => l.isCheckedToday).length;
   const totalCount = locations.length;
   const progressPercentage = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
-  if (sessionLoading || loadingLocations) {
+  // Progress APAR
+  const checkedAparCount = aparTasks.filter(t => t.status === 'completed').length;
+  const totalAparCount = aparTasks.length;
+  const aparProgressPercentage = totalAparCount > 0 ? Math.round((checkedAparCount / totalAparCount) * 100) : 0;
+
+  if (sessionLoading || loadingData) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="relative flex h-16 w-16 items-center justify-center">
@@ -165,7 +220,6 @@ const SatpamDashboard = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto relative group">
-      {/* Glowing background aura */}
       <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
 
       <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/60 backdrop-blur-2xl shadow-2xl overflow-hidden">
@@ -190,93 +244,183 @@ const SatpamDashboard = () => {
         </CardHeader>
         
         <CardContent className="pt-6 space-y-6">
-          {!isScheduledToday ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-              <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
-                <ShieldAlert className="h-6 w-6 text-red-400" />
-              </div>
-              <div>
-                <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal Tugas</h4>
-                <p className="text-sm text-slate-400 mt-1">Anda tidak memiliki jadwal tugas aktif untuk hari ini.</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Progress Bar */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3">
-                <div className="flex justify-between text-xs font-mono uppercase tracking-wider text-slate-300">
-                  <span>Progres Patroli Hari Ini</span>
-                  <span className="text-cyan-400">{checkedCount} dari {totalCount} Lokasi ({progressPercentage}%)</span>
-                </div>
-                <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-500 to-blue-600 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-              </div>
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder="Cari area patroli atau kode APAR..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-11 pr-4 py-6 rounded-2xl border-slate-800/80 bg-slate-900/40 text-white placeholder-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 transition-all duration-300"
+            />
+          </div>
 
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
-                <Input
-                  type="text"
-                  placeholder="Cari lokasi patroli..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-11 pr-4 py-6 rounded-2xl border-slate-800/80 bg-slate-900/40 text-white placeholder-slate-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 transition-all duration-300"
-                />
-              </div>
+          <Tabs defaultValue="patrol" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5 mb-6">
+              <TabsTrigger value="patrol" className="rounded-xl font-mono text-xs uppercase py-3 data-[state=active]:bg-blue-600">
+                <MapPin className="mr-2 h-4 w-4" /> Patroli Area ({totalCount})
+              </TabsTrigger>
+              <TabsTrigger value="apar" className="rounded-xl font-mono text-xs uppercase py-3 data-[state=active]:bg-orange-600">
+                <Flame className="mr-2 h-4 w-4" /> Cek APAR ({totalAparCount})
+              </TabsTrigger>
+            </TabsList>
 
-              {filteredLocations.length === 0 ? (
-                <p className="text-center py-12 text-slate-400 font-mono">
-                  {searchQuery ? "Tidak ada lokasi yang cocok." : "Belum ada lokasi terdaftar hari ini."}
-                </p>
+            {/* TAB PATROLI AREA */}
+            <TabsContent value="patrol" className="space-y-6 animate-fade-in">
+              {!isScheduledToday ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                  <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                    <ShieldAlert className="h-6 w-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal Patroli</h4>
+                    <p className="text-sm text-slate-400 mt-1">Anda tidak memiliki jadwal patroli aktif hari ini.</p>
+                  </div>
+                </div>
               ) : (
-                <div className="space-y-3">
-                  {filteredLocations.map((loc) => (
-                    <div 
-                      key={loc.id}
-                      className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 flex items-center justify-between transition-all duration-200 hover:border-cyan-500/30 hover:bg-slate-900/60"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-3 rounded-xl ${loc.isCheckedToday ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
-                          <MapPin className="h-5 w-5" />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="font-bold text-white text-sm">{loc.name}</h4>
-                          <div className="flex items-center">
-                            {loc.isCheckedToday ? (
-                              <span className="inline-flex items-center text-xs font-mono text-emerald-400">
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> SELESAI
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center text-xs font-mono text-amber-400">
-                                <AlertCircle className="h-3.5 w-3.5 mr-1" /> BELUM DICEK
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        onClick={() => handleScanLocation(loc.id)}
-                        disabled={loc.isCheckedToday}
-                        className={`rounded-xl px-4 font-mono text-xs uppercase tracking-wider transition-all duration-200 ${
-                          loc.isCheckedToday 
-                            ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed' 
-                            : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]'
-                        }`}
-                      >
-                        {loc.isCheckedToday ? "Selesai" : "Mulai Cek"}
-                      </Button>
+                <>
+                  {/* Progress Bar Patroli */}
+                  <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3">
+                    <div className="flex justify-between text-xs font-mono uppercase tracking-wider text-slate-300">
+                      <span>Progres Patroli Hari Ini</span>
+                      <span className="text-cyan-400">{checkedCount} dari {totalCount} Lokasi ({progressPercentage}%)</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                      <div 
+                        className="bg-gradient-to-r from-cyan-500 to-blue-600 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+                        style={{ width: `${progressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {filteredLocations.length === 0 ? (
+                    <p className="text-center py-12 text-slate-400 font-mono">Tidak ada lokasi patroli yang cocok.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredLocations.map((loc) => (
+                        <div 
+                          key={loc.id}
+                          className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 flex items-center justify-between transition-all duration-200 hover:border-cyan-500/30 hover:bg-slate-900/60"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-3 rounded-xl ${loc.isCheckedToday ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
+                              <MapPin className="h-5 w-5" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="font-bold text-white text-sm">{loc.name}</h4>
+                              <div className="flex items-center">
+                                {loc.isCheckedToday ? (
+                                  <span className="inline-flex items-center text-xs font-mono text-emerald-400">
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> SELESAI
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-xs font-mono text-amber-400">
+                                    <AlertCircle className="h-3.5 w-3.5 mr-1" /> BELUM DICEK
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            onClick={() => handleScanLocation(loc.id)}
+                            disabled={loc.isCheckedToday}
+                            className={`rounded-xl px-4 font-mono text-xs uppercase tracking-wider transition-all duration-200 ${
+                              loc.isCheckedToday 
+                                ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed' 
+                                : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                            }`}
+                          >
+                            {loc.isCheckedToday ? "Selesai" : "Mulai Cek"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
+            </TabsContent>
+
+            {/* TAB CEK APAR */}
+            <TabsContent value="apar" className="space-y-6 animate-fade-in">
+              {!isAparScheduledToday ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                  <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                    <Flame className="h-6 w-6 text-orange-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal Cek APAR</h4>
+                    <p className="text-sm text-slate-400 mt-1">Anda tidak memiliki jadwal pengecekan APAR aktif hari ini.</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Progress Bar APAR */}
+                  <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3">
+                    <div className="flex justify-between text-xs font-mono uppercase tracking-wider text-slate-300">
+                      <span>Progres Cek APAR Hari Ini</span>
+                      <span className="text-orange-400">{checkedAparCount} dari {totalAparCount} APAR ({aparProgressPercentage}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                      <div 
+                        className="bg-gradient-to-r from-orange-500 to-red-600 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
+                        style={{ width: `${aparProgressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {filteredAparTasks.length === 0 ? (
+                    <p className="text-center py-12 text-slate-400 font-mono">Tidak ada tugas APAR yang cocok.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredAparTasks.map((task) => (
+                        <div 
+                          key={task.id}
+                          className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 flex items-center justify-between transition-all duration-200 hover:border-orange-500/30 hover:bg-slate-900/60"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-3 rounded-xl ${task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}`}>
+                              <Flame className="h-5 w-5" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="font-bold text-white text-sm">{task.name}</h4>
+                              <p className="text-xs text-slate-400 font-mono">{task.type} • {task.posisi_gedung}</p>
+                              <div className="flex items-center">
+                                {task.status === 'completed' ? (
+                                  <span className="inline-flex items-center text-xs font-mono text-emerald-400">
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> SELESAI
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-xs font-mono text-amber-400">
+                                    <AlertCircle className="h-3.5 w-3.5 mr-1" /> BELUM DICEK
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            onClick={() => handleScanApar(task.apar_location_id)}
+                            disabled={task.status === 'completed'}
+                            className={`rounded-xl px-4 font-mono text-xs uppercase tracking-wider transition-all duration-200 ${
+                              task.status === 'completed' 
+                                ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed' 
+                                : 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-400 hover:to-red-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
+                            }`}
+                          >
+                            {task.status === 'completed' ? "Selesai" : "Scan APAR"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
