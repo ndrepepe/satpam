@@ -65,31 +65,41 @@ const CheckAreaReport = () => {
     setLoading(true);
     try {
       const compressedBlob = await compressImage(photoFile, 1024, 1024, 0.7);
-      const arrayBuffer = await compressedBlob.arrayBuffer();
-      const photoData = Array.from(new Uint8Array(arrayBuffer));
+      
+      const fileExt = compressedBlob.type.split('/')[1] || 'jpg';
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `uploads/${user.id}/${locationId}-${timestamp}.${fileExt}`;
+      const bucketName = 'satpam';
 
-      const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
-        body: {
-          userId: user.id,
-          locationId: locationId,
-          photoData: photoData,
-          contentType: compressedBlob.type
-        },
-      });
+      // Unggah langsung ke Supabase Storage dari sisi klien (menghindari Edge Function)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filename, compressedBlob, {
+          contentType: compressedBlob.type,
+          upsert: false,
+        });
 
-      if (error || !data?.publicUrl) throw new Error(error?.message || "Gagal upload");
+      if (uploadError) {
+        throw new Error(`Gagal mengunggah foto ke Storage: ${uploadError.message}`);
+      }
 
+      // Dapatkan URL publik
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filename);
+
+      // Simpan laporan ke database
       const { error: insertError } = await supabase.from('check_area_reports').insert({
         user_id: user.id,
         location_id: locationId,
-        photo_url: data.publicUrl,
+        photo_url: publicUrl,
       });
 
       if (insertError) throw insertError;
       toast.success("Laporan patroli berhasil dikirim!");
       navigate('/satpam-dashboard');
     } catch (error: any) {
-      toast.error(`Gagal: ${error.message}`);
+      toast.error(`Gagal mengirim laporan: ${error.message}`);
     } finally {
       setLoading(false);
     }
