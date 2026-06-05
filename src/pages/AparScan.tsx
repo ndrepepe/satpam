@@ -27,28 +27,31 @@ const AparScan = () => {
     fetchApar();
   }, [aparId]);
 
+  // Fungsi pembantu untuk mengekstrak UUID dari teks apa pun
+  const extractUUID = (text: string): string | null => {
+    const match = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return match ? match[0].toLowerCase() : null;
+  };
+
   const handleScan = (result: any, error: any) => {
+    // Jika sudah sukses, abaikan frame pemindaian berikutnya
+    if (status === 'success') return;
+
     if (result) {
-      const scannedText = result.text?.trim().toLowerCase();
-      const targetId = aparId?.trim().toLowerCase();
-      const targetQr = expectedQr?.trim().toLowerCase();
+      const scannedText = result.text || result.getText?.();
+      if (!scannedText) return;
 
-      if (!targetId) return;
+      const scannedUuid = extractUUID(scannedText);
+      const targetUuid = extractUUID(aparId || '') || aparId?.toLowerCase().trim();
 
-      // Verifikasi super fleksibel:
-      // 1. Teks scan sama persis dengan ID target
-      // 2. Teks scan sama persis dengan URL lengkap target
-      // 3. Teks scan mengandung ID target (misal scan URL lengkap tapi targetId adalah UUID)
-      const isValid = 
-        scannedText === targetId || 
-        scannedText === targetQr || 
-        (scannedText && scannedText.includes(targetId));
+      if (!targetUuid) return;
 
-      if (isValid) {
+      // Verifikasi super tangguh menggunakan UUID hasil ekstraksi
+      if (scannedUuid === targetUuid || scannedText.toLowerCase().includes(targetUuid)) {
         setStatus('success');
-        toast.success("QR Code Valid!");
+        toast.success("QR Code Valid! APAR terverifikasi.");
       } else {
-        console.log("Scan Mismatch:", { scannedText, targetId, targetQr });
+        console.log("Scan Mismatch Details:", { scannedText, scannedUuid, targetUuid });
         toast.error("QR Code tidak cocok dengan APAR ini.");
       }
     }
