@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useSession } from '@/integrations/supabase/SessionContext';
 import { Flame, CheckCircle, AlertTriangle, XCircle, Camera, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { uploadToBackblaze } from '@/utils/backblaze';
+import { uploadToSupabase } from '@/utils/supabaseStorage';
 
 const AparReport = () => {
   const [searchParams] = useSearchParams();
@@ -69,10 +69,10 @@ const AparReport = () => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.${fileExt}`;
 
-      // 2. Unggah foto selfie ke Backblaze B2
-      const publicUrl = await uploadToBackblaze(compressedBlob, filename, compressedBlob.type);
+      // 2. Unggah foto selfie ke Supabase Storage
+      const publicUrl = await uploadToSupabase(compressedBlob, filename, compressedBlob.type);
 
-      // 3. Simpan laporan ke database (termasuk photo_url Backblaze B2)
+      // 3. Simpan laporan ke database (termasuk photo_url Supabase Storage)
       const { error } = await supabase.from('apar_reports').insert({
         apar_location_id: aparId,
         user_id: user.id,

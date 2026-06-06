@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { getPresignedUrl } from '@/utils/backblaze';
+import { getSupabaseSignedUrl } from '@/utils/supabaseStorage';
 
 interface Location {
   id: string;
@@ -241,7 +241,7 @@ const SupervisorDashboard = () => {
   // Fungsi untuk membuat presigned URL secara dinamis dan membukanya di tab baru
   const handleViewPhoto = async (photoUrl: string) => {
     try {
-      const presignedUrl = await getPresignedUrl(photoUrl);
+      const presignedUrl = await getSupabaseSignedUrl(photoUrl);
       window.open(presignedUrl, '_blank', 'noopener,noreferrer');
     } catch (error: any) {
       toast.error("Gagal memuat foto laporan: " + error.message);
