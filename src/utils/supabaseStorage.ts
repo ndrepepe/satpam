@@ -3,34 +3,62 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Mengunggah file Blob/File ke Supabase Storage di dalam bucket 'satpam'
+ * Mengunggah file Blob/File ke Supabase Storage melalui Edge Function untuk menghindari error RLS
  */
 export const uploadToSupabase = async (
   fileBlob: Blob,
   fileName: string,
   contentType: string
 ): Promise<string> => {
-  const bucketName = 'satpam';
+  try {
+    // Ekstrak userId dan locationId dari path fileName secara otomatis
+    // Format 1: uploads/USER_ID/LOCATION_ID-TIMESTAMP.jpg
+    // Format 2: uploads/apar/USER_ID/APAR_ID-TIMESTAMP.jpg
+    const parts = fileName.split('/');
+    let userId = '';
+    let locationIdWithTimestamp = '';
 
-  // Unggah file ke Supabase Storage
-  const { data, error } = await supabase.storage
-    .from(bucketName)
-    .upload(fileName, fileBlob, {
-      contentType,
-      upsert: true,
+    if (parts.length === 3) {
+      userId = parts[1];
+      locationIdWithTimestamp = parts[2];
+    } else if (parts.length === 4) {
+      userId = parts[2];
+      locationIdWithTimestamp = parts[3];
+    } else {
+      throw new Error("Format nama file tidak dikenali.");
+    }
+
+    const locationId = locationIdWithTimestamp.split('-')[0];
+
+    // Konversi Blob menjadi Array Byte (Uint8Array) agar bisa dikirim via JSON ke Edge Function
+    const arrayBuffer = await fileBlob.arrayBuffer();
+    const byteArray = Array.from(new Uint8Array(arrayBuffer));
+
+    console.log(`[Supabase Storage] Mengunggah via Edge Function untuk User: ${userId}, Lokasi: ${locationId}`);
+
+    // Panggil Edge Function yang menggunakan Service Role Key (Bypass RLS)
+    const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
+      body: {
+        userId,
+        locationId,
+        photoData: byteArray,
+        contentType
+      }
     });
 
-  if (error) {
-    console.error("[Supabase Storage] Gagal mengunggah:", error);
-    throw new Error(`Gagal mengunggah ke Supabase Storage: ${error.message}`);
+    if (error) {
+      throw error;
+    }
+
+    if (!data || !data.publicUrl) {
+      throw new Error("Gagal mendapatkan URL publik dari Edge Function.");
+    }
+
+    return data.publicUrl;
+  } catch (error: any) {
+    console.error("[Supabase Storage] Gagal mengunggah via Edge Function:", error);
+    throw new Error(`Gagal mengunggah foto: ${error.message}`);
   }
-
-  // Dapatkan URL publik file
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
-
-  return publicUrl;
 };
 
 /**
