@@ -3,7 +3,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Mengunggah file Blob/File ke Supabase Storage melalui Edge Function untuk menghindari error RLS
+ * Mengunggah file ke Supabase Storage melalui Edge Function menggunakan payload biner (sangat efisien)
  */
 export const uploadToSupabase = async (
   fileBlob: Blob,
@@ -11,9 +11,6 @@ export const uploadToSupabase = async (
   contentType: string
 ): Promise<string> => {
   try {
-    // Ekstrak userId dan locationId dari path fileName secara otomatis
-    // Format 1: uploads/USER_ID/LOCATION_ID-TIMESTAMP.jpg
-    // Format 2: uploads/apar/USER_ID/APAR_ID-TIMESTAMP.jpg
     const parts = fileName.split('/');
     let userId = '';
     let locationIdWithTimestamp = '';
@@ -25,45 +22,36 @@ export const uploadToSupabase = async (
       userId = parts[2];
       locationIdWithTimestamp = parts[3];
     } else {
-      throw new Error("Format nama file tidak dikenali.");
+      throw new Error("Format path file tidak didukung.");
     }
 
     const locationId = locationIdWithTimestamp.split('-')[0];
 
-    // Konversi Blob menjadi Array Byte (Uint8Array) agar bisa dikirim via JSON ke Edge Function
-    const arrayBuffer = await fileBlob.arrayBuffer();
-    const byteArray = Array.from(new Uint8Array(arrayBuffer));
+    console.log(`[Supabase Storage] Mengirim biner ke Edge Function...`);
 
-    console.log(`[Supabase Storage] Mengunggah via Edge Function untuk User: ${userId}, Lokasi: ${locationId}`);
-
-    // Panggil Edge Function yang menggunakan Service Role Key (Bypass RLS)
+    // Mengirim file sebagai biner mentah (bukan JSON) agar koneksi stabil dan ringan
     const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
-      body: {
-        userId,
-        locationId,
-        photoData: byteArray,
-        contentType
+      body: fileBlob,
+      headers: {
+        'x-user-id': userId,
+        'x-location-id': locationId,
+        'x-file-name': fileName,
+        'Content-Type': contentType
       }
     });
 
-    if (error) {
-      throw error;
-    }
-
-    if (!data || !data.publicUrl) {
-      throw new Error("Gagal mendapatkan URL publik dari Edge Function.");
-    }
+    if (error) throw error;
+    if (!data?.publicUrl) throw new Error("Respon fungsi tidak valid.");
 
     return data.publicUrl;
   } catch (error: any) {
-    console.error("[Supabase Storage] Gagal mengunggah via Edge Function:", error);
-    throw new Error(`Gagal mengunggah foto: ${error.message}`);
+    console.error("[Supabase Storage] Gagal mengunggah:", error);
+    throw new Error(`Gagal mengirim laporan ke server. Pastikan koneksi internet stabil.`);
   }
 };
 
 /**
- * Membuat Signed URL untuk file dari Supabase Storage jika bucket bersifat privat,
- * atau mengembalikan URL asli jika terjadi kegagalan.
+ * Membuat Signed URL untuk file privat
  */
 export const getSupabaseSignedUrl = async (photoUrl: string): Promise<string> => {
   if (!photoUrl) return "";
@@ -71,7 +59,6 @@ export const getSupabaseSignedUrl = async (photoUrl: string): Promise<string> =>
 
   try {
     const urlObj = new URL(photoUrl);
-    // Ekstrak path file setelah nama bucket di URL Supabase Storage
     const searchPattern = `/storage/v1/object/public/${bucketName}/`;
     const pathParts = urlObj.pathname.split(searchPattern);
 
@@ -79,7 +66,7 @@ export const getSupabaseSignedUrl = async (photoUrl: string): Promise<string> =>
       const filePath = decodeURIComponent(pathParts[1]);
       const { data, error } = await supabase.storage
         .from(bucketName)
-        .createSignedUrl(filePath, 3600); // Berlaku selama 1 jam
+        .createSignedUrl(filePath, 3600);
 
       if (error) throw error;
       return data.signedUrl;
@@ -87,7 +74,6 @@ export const getSupabaseSignedUrl = async (photoUrl: string): Promise<string> =>
     
     return photoUrl;
   } catch (error) {
-    console.warn("[Supabase Storage] Gagal membuat signed URL, menggunakan URL publik asli:", error);
     return photoUrl;
   }
 };
