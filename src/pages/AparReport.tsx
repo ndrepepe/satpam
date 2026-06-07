@@ -68,11 +68,14 @@ const AparReport = () => {
 
     setLoading(true);
     try {
-      // Kompresi lebih agresif (800px, kualitas 0.6)
-      const compressedBlob = await compressImage(photoFile, 800, 800, 0.6);
+      // Kompresi ke 640px (sangat ringan)
+      const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
       
-      if (compressedBlob.size > 2 * 1024 * 1024) {
-        throw new Error("Ukuran foto masih terlalu besar. Coba gunakan kamera belakang atau kurangi guncangan.");
+      console.log(`[Compression] Original: ${photoFile.size} bytes, Compressed: ${compressedBlob.size} bytes`);
+
+      // Batas toleransi ditingkatkan ke 8MB
+      if (compressedBlob.size > 8 * 1024 * 1024) {
+        throw new Error("Ukuran foto masih terlalu besar (>8MB). Harap kurangi resolusi kamera Anda.");
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

@@ -71,12 +71,14 @@ const CheckAreaReport = () => {
     if (!user || !locationId || !photoFile) return;
     setLoading(true);
     try {
-      // Kompresi lebih agresif (800px, kualitas 0.6) untuk memastikan di bawah limit Edge Function
-      const compressedBlob = await compressImage(photoFile, 800, 800, 0.6);
+      // Kompresi ke 640px (sangat ringan namun tetap jelas)
+      const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
       
-      // Validasi ukuran akhir
-      if (compressedBlob.size > 2 * 1024 * 1024) {
-        throw new Error("Foto terlalu besar bahkan setelah dikompres. Gunakan pencahayaan yang lebih baik.");
+      console.log(`[Compression] Original: ${photoFile.size} bytes, Compressed: ${compressedBlob.size} bytes`);
+
+      // Batas toleransi ditingkatkan ke 8MB (Aman untuk Edge Function 10MB)
+      if (compressedBlob.size > 8 * 1024 * 1024) {
+        throw new Error("Ukuran foto masih terlalu besar (>8MB). Harap gunakan pencahayaan yang cukup.");
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
