@@ -15,13 +15,11 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar as CalendarIcon, ShieldAlert, Shield, CheckCircle2, AlertCircle, Eye, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, ShieldAlert, CheckCircle2, AlertCircle, MapPin } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { getSupabaseSignedUrl } from '@/utils/supabaseStorage';
 
 interface Location {
   id: string;
@@ -54,7 +52,6 @@ interface SatpamTab {
     location: Location;
     isCheckedToday: boolean;
     lastCheckedAt: string | null;
-    photoUrl: string | null;
   }[];
 }
 
@@ -85,7 +82,6 @@ const SupervisorDashboard = () => {
         .single();
 
       if (profileError) {
-        console.error("Error fetching profile role:", profileError);
         toast.error("Gagal memuat peran pengguna.");
         navigate('/');
         return;
@@ -103,53 +99,39 @@ const SupervisorDashboard = () => {
     const fetchData = async () => {
       setLoadingData(true);
       try {
-        const { data: locData, error: locError } = await supabase
-          .from('locations')
-          .select('id, name, qr_code_data, posisi_gedung');
-        if (locError) throw locError;
+        const { data: locData } = await supabase.from('locations').select('id, name, qr_code_data, posisi_gedung');
         setLocationList(locData as Location[]);
 
         const formattedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-        const { data, error: scheduleError } = await supabase
-          .from('schedules')
-          .select(`
-            id,
-            schedule_date,
-            user_id,
-            location_id,
+        const { data } = await supabase.from('schedules').select(`
+            id, schedule_date, user_id, location_id,
             profiles (first_name, last_name, id_number),
             locations (name, posisi_gedung)
           `);
         const scheduleData = data?.filter(s => s.schedule_date === formattedDate);
-
-        if (scheduleError) throw scheduleError;
         setSchedules(scheduleData as unknown as ScheduleEntry[]);
 
         const now = new Date();
         const currentGMT7Time = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 60 * 60 * 1000));
-        let targetCalendarDateForReports = new Date(currentGMT7Time);
-        targetCalendarDateForReports.setHours(6, 0, 0, 0); 
-        if (currentGMT7Time.getHours() < 6) {
-          targetCalendarDateForReports.setDate(targetCalendarDateForReports.getDate() - 1);
-        }
+        let targetCalendarDate = new Date(currentGMT7Time);
+        targetCalendarDate.setHours(6, 0, 0, 0); 
+        if (currentGMT7Time.getHours() < 6) targetCalendarDate.setDate(targetCalendarDate.getDate() - 1);
         
-        const localStartOfCheckingDayForReports = new Date(targetCalendarDateForReports.getFullYear(), targetCalendarDateForReports.getMonth(), targetCalendarDateForReports.getDate(), 6, 0, 0);
-        const startOfCheckingDayUTC = localStartOfCheckingDayForReports.toISOString();
-        const endOfCheckingDayUTC = new Date(localStartOfCheckingDayForReports.getTime() + (24 * 60 * 60 * 1000)).toISOString();
+        const localStartOfCheckingDay = new Date(targetCalendarDate.getFullYear(), targetCalendarDate.getMonth(), targetCalendarDate.getDate(), 6, 0, 0);
+        const startOfCheckingDayUTC = localStartOfCheckingDay.toISOString();
+        const endOfCheckingDayUTC = new Date(localStartOfCheckingDay.getTime() + (24 * 60 * 60 * 1000)).toISOString();
 
-        const { data: reportsData, error: reportsError } = await supabase
+        const { data: reportsData } = await supabase
           .from('check_area_reports')
-          .select('location_id, user_id, created_at, photo_url')
+          .select('location_id, user_id, created_at')
           .gte('created_at', startOfCheckingDayUTC)
           .lt('created_at', endOfCheckingDayUTC);
 
-        if (reportsError) throw reportsError;
         setReports(reportsData as CheckAreaReport[]);
 
       } catch (error: any) {
         toast.error(`Gagal memuat data: ${error.message}`);
-        console.error("Error fetching data for supervisor dashboard:", error);
       } finally {
         setLoadingData(false);
       }
@@ -159,17 +141,7 @@ const SupervisorDashboard = () => {
   }, [session, sessionLoading, user, navigate, selectedDate]);
 
   const satpamTabs: SatpamTab[] = useMemo(() => {
-    const groupedBySatpam = new Map<string, {
-      satpamId: string;
-      satpamName: string;
-      assignedLocationIds: Set<string>;
-      locationsStatus: {
-        location: Location;
-        isCheckedToday: boolean;
-        lastCheckedAt: string | null;
-        photoUrl: string | null;
-      }[];
-    }>();
+    const groupedBySatpam = new Map<string, any>();
 
     schedules.forEach(schedule => {
       const satpamId = schedule.user_id;
@@ -178,10 +150,7 @@ const SupervisorDashboard = () => {
 
       if (!groupedBySatpam.has(satpamId)) {
         groupedBySatpam.set(satpamId, {
-          satpamId,
-          satpamName,
-          assignedLocationIds: new Set(),
-          locationsStatus: [],
+          satpamId, satpamName, assignedLocationIds: new Set(), locationsStatus: [],
         });
       }
 
@@ -190,68 +159,34 @@ const SupervisorDashboard = () => {
 
       if (location) {
         const report = reports.find(r => r.user_id === satpamId && r.location_id === location.id);
-        
         satpamEntry.locationsStatus.push({
           location: location,
           isCheckedToday: !!report,
           lastCheckedAt: report ? format(new Date(report.created_at), 'HH:mm', { locale: idLocale }) : null,
-          photoUrl: report?.photo_url || null,
         });
       }
     });
 
     const result: SatpamTab[] = [];
     groupedBySatpam.forEach(entry => {
-      let locationDisplay: string;
-      const allLocationsCount = locationList.length;
-      const gedungBaratLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Barat');
-      const gedungTimurLocations = locationList.filter(loc => loc.posisi_gedung === 'Gedung Timur');
+      let locationDisplay = "Beberapa Lokasi";
+      const gedBaratCount = locationList.filter(l => l.posisi_gedung === 'Gedung Barat').length;
+      const gedTimurCount = locationList.filter(l => l.posisi_gedung === 'Gedung Timur').length;
 
-      const assignedToGedungBarat = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungBaratLocations.some(gbLoc => gbLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungBaratLocations.length && gedungBaratLocations.length > 0;
-
-      const assignedToGedungTimur = Array.from(entry.assignedLocationIds).every(locId => 
-        gedungTimurLocations.some(gtLoc => gtLoc.id === locId)
-      ) && entry.assignedLocationIds.size === gedungTimurLocations.length && gedungTimurLocations.length > 0;
-
-      if (entry.assignedLocationIds.size === allLocationsCount && allLocationsCount > 0) {
-        locationDisplay = "Semua Gedung";
-      } else if (assignedToGedungBarat) {
-        locationDisplay = "Gedung Barat";
-      } else if (assignedToGedungTimur) {
-        locationDisplay = "Gedung Timur";
-      } else if (entry.assignedLocationIds.size > 0) {
-        locationDisplay = "Beberapa Lokasi";
-      } else {
-        locationDisplay = "Tidak Ditugaskan";
-      }
+      if (entry.assignedLocationIds.size === locationList.length && locationList.length > 0) locationDisplay = "Semua Gedung";
+      else if (entry.assignedLocationIds.size === gedBaratCount) locationDisplay = "Gedung Barat";
+      else if (entry.assignedLocationIds.size === gedTimurCount) locationDisplay = "Gedung Timur";
 
       result.push({
         satpamId: entry.satpamId,
         satpamName: entry.satpamName,
         locationDisplay: locationDisplay,
-        locationsStatus: entry.locationsStatus.sort((a, b) => a.location.name.localeCompare(b.location.name)),
+        locationsStatus: entry.locationsStatus.sort((a: any, b: any) => a.location.name.localeCompare(b.location.name)),
       });
     });
 
     return result.sort((a, b) => a.satpamName.localeCompare(b.satpamName));
   }, [schedules, reports, locationList, selectedDate]);
-
-  // Fungsi untuk membuat presigned URL secara dinamis dan membukanya di tab baru
-  const handleViewPhoto = async (photoUrl: string) => {
-    try {
-      const presignedUrl = await getSupabaseSignedUrl(photoUrl);
-      window.open(presignedUrl, '_blank', 'noopener,noreferrer');
-    } catch (error: any) {
-      toast.error("Gagal memuat foto laporan: " + error.message);
-    }
-  };
-
-  // Calculate overall stats for the selected date
-  const totalAssignedLocations = schedules.length;
-  const totalCheckedLocations = reports.length;
-  const totalUncheckedLocations = Math.max(0, totalAssignedLocations - totalCheckedLocations);
 
   if (sessionLoading || loadingData) {
     return (
@@ -268,47 +203,7 @@ const SupervisorDashboard = () => {
 
   return (
     <div className="w-full max-w-5xl mx-auto relative group space-y-6">
-      {/* Glowing background aura */}
       <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 opacity-20 blur-xl transition duration-1000 group-hover:opacity-30" />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
-        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
-          <CardContent className="p-6 flex items-center space-x-4">
-            <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
-              <MapPin className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Total Tugas</p>
-              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalAssignedLocations}</h3>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
-          <CardContent className="p-6 flex items-center space-x-4">
-            <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Sudah Dicek</p>
-              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalCheckedLocations}</h3>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-slate-800/60 bg-slate-950/40 backdrop-blur-md rounded-2xl overflow-hidden">
-          <CardContent className="p-6 flex items-center space-x-4">
-            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
-              <AlertCircle className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Belum Dicek</p>
-              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">{totalUncheckedLocations}</h3>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       <Card className="relative rounded-3xl border border-slate-800/80 bg-slate-950/60 backdrop-blur-2xl shadow-2xl overflow-hidden">
         <CardHeader className="border-b border-slate-800/80 pb-6">
@@ -320,129 +215,70 @@ const SupervisorDashboard = () => {
                 </div>
               </div>
               <div>
-                <CardTitle className="text-2xl font-extrabold tracking-wider text-white">COMMAND CENTER SUPERVISOR</CardTitle>
-                <p className="text-xs text-slate-400 font-mono uppercase tracking-widest mt-0.5">Pemantauan & Verifikasi Spasial</p>
+                <CardTitle className="text-2xl font-extrabold tracking-wider text-white">MONITORING SUPERVISOR</CardTitle>
+                <p className="text-xs text-slate-400 font-mono uppercase tracking-widest mt-0.5">Pemantauan Patroli & APAR</p>
               </div>
             </div>
 
-            {/* Date Picker */}
-            <div className="flex justify-start md:justify-end">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-[240px] justify-start text-left font-mono text-xs border-slate-800/80 bg-slate-900/40 text-white hover:bg-slate-800/80"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-cyan-400" />
-                    {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-slate-950 border-slate-800" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    initialFocus
-                    className="bg-slate-950 text-white border-slate-800"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-[240px] justify-start text-left font-mono text-xs border-slate-800/80 bg-slate-900/40 text-white hover:bg-slate-800/80">
+                  <CalendarIcon className="mr-2 h-4 w-4 text-cyan-400" />
+                  {selectedDate ? format(selectedDate, "dd MMMM yyyy", { locale: idLocale }) : <span>Pilih tanggal</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 bg-slate-950 border-slate-800" align="end">
+                <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} className="bg-slate-950 text-white border-slate-800" />
+              </PopoverContent>
+            </Popover>
           </div>
         </CardHeader>
         
         <CardContent className="pt-6">
-          {satpamTabs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-              <div className="h-12 w-12 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700/50">
-                <AlertCircle className="h-6 w-6 text-slate-400" />
-              </div>
-              <div>
-                <h4 className="text-lg font-bold text-white">Tidak Ada Jadwal</h4>
-                <p className="text-sm text-slate-400 mt-1">Tidak ada jadwal yang ditetapkan untuk tanggal ini.</p>
-              </div>
-            </div>
-          ) : (
-            <Tabs defaultValue={satpamTabs[0]?.satpamId} className="w-full">
-              <TabsList className="flex flex-wrap gap-2 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-1.5 mb-6">
-                {satpamTabs.map((satpamTab) => (
-                  <TabsTrigger 
-                    key={satpamTab.satpamId} 
-                    value={satpamTab.satpamId}
-                    className="rounded-xl font-mono text-xs uppercase tracking-wider px-4 py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-blue-500 data-[state=active]:text-white transition-all duration-300"
-                  >
-                    {satpamTab.satpamName}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
+          <Tabs defaultValue={satpamTabs[0]?.satpamId} className="w-full">
+            <TabsList className="flex flex-wrap gap-2 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-1.5 mb-6">
               {satpamTabs.map((satpamTab) => (
-                <TabsContent key={satpamTab.satpamId} value={satpamTab.satpamId} className="space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
-                    <h4 className="text-lg font-bold text-white font-mono uppercase tracking-wider">
-                      Tugas: {satpamTab.satpamName}
-                    </h4>
-                    <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/30 font-mono text-xs">
-                      {satpamTab.locationDisplay}
-                    </Badge>
-                  </div>
-
-                  {satpamTab.locationsStatus.length === 0 ? (
-                    <p className="text-center py-12 text-slate-400 font-mono">Tidak ada lokasi ditugaskan.</p>
-                  ) : (
-                    <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/20">
-                      <Table>
-                        <TableHeader className="bg-slate-900/50">
-                          <TableRow className="border-b border-slate-800/80 hover:bg-transparent">
-                            <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Lokasi</TableHead>
-                            <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Gedung</TableHead>
-                            <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Status</TableHead>
-                            <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Waktu Cek</TableHead>
-                            <TableHead className="text-slate-300 font-mono uppercase tracking-wider text-center">Bukti Foto</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {satpamTab.locationsStatus.map((status) => (
-                            <TableRow key={status.location.id} className="border-b border-slate-800/50 hover:bg-slate-900/30 transition-colors duration-200">
-                              <TableCell className="font-medium text-white text-center py-4">{status.location.name}</TableCell>
-                              <TableCell className="text-slate-300 text-center py-4">{status.location.posisi_gedung || 'N/A'}</TableCell>
-                              <TableCell className="text-center py-4">
-                                {status.isCheckedToday ? (
-                                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full font-mono text-xs">
-                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5 inline" />
-                                    SELESAI
-                                  </Badge>
-                                ) : (
-                                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1 rounded-full font-mono text-xs">
-                                    <AlertCircle className="mr-1 h-3.5 w-3.5 inline" />
-                                    BELUM DICEK
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-slate-300 text-center py-4 font-mono">{status.lastCheckedAt || '-'}</TableCell>
-                              <TableCell className="text-center py-4">
-                                {status.photoUrl ? (
-                                  <button 
-                                    onClick={() => handleViewPhoto(status.photoUrl!)}
-                                    className="inline-flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 font-mono text-xs transition-colors duration-200 bg-transparent border-none cursor-pointer"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                    <span>LIHAT FOTO</span>
-                                  </button>
-                                ) : (
-                                  <span className="text-slate-500 font-mono">-</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </TabsContent>
+                <TabsTrigger 
+                  key={satpamTab.satpamId} 
+                  value={satpamTab.satpamId}
+                  className="rounded-xl font-mono text-xs uppercase px-4 py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-blue-500 data-[state=active]:text-white"
+                >
+                  {satpamTab.satpamName}
+                </TabsTrigger>
               ))}
-            </Tabs>
-          )}
+            </TabsList>
+
+            {satpamTabs.map((satpamTab) => (
+              <TabsContent key={satpamTab.satpamId} value={satpamTab.satpamId} className="space-y-4 animate-fade-in">
+                <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/20">
+                  <Table>
+                    <TableHeader className="bg-slate-900/50">
+                      <TableRow className="border-b border-slate-800/80 hover:bg-transparent">
+                        <TableHead className="text-slate-300 font-mono uppercase text-center py-4">Lokasi</TableHead>
+                        <TableHead className="text-slate-300 font-mono uppercase text-center py-4">Gedung</TableHead>
+                        <TableHead className="text-slate-300 font-mono uppercase text-center py-4">Status</TableHead>
+                        <TableHead className="text-slate-300 font-mono uppercase text-center py-4">Waktu Cek</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {satpamTab.locationsStatus.map((status) => (
+                        <TableRow key={status.location.id} className="border-b border-slate-800/50 hover:bg-slate-900/30 transition-colors">
+                          <TableCell className="font-medium text-white text-center py-4">{status.location.name}</TableCell>
+                          <TableCell className="text-slate-300 text-center py-4">{status.location.posisi_gedung || '-'}</TableCell>
+                          <TableCell className="text-center py-4">
+                            <Badge className={status.isCheckedToday ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}>
+                              {status.isCheckedToday ? "SELESAI" : "BELUM DICEK"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-slate-300 text-center py-4 font-mono">{status.lastCheckedAt || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
         </CardContent>
       </Card>
     </div>
