@@ -51,13 +51,11 @@ const CheckAreaReport = () => {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let { width, height } = img;
-          
           if (width > height) {
             if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
           } else {
             if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
           }
-
           canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
@@ -68,28 +66,23 @@ const CheckAreaReport = () => {
   };
 
   const handleSubmitReport = async () => {
-    if (!user || !locationId || !photoFile) return;
+    if (!user || !locationId) return;
     setLoading(true);
     try {
-      // Kompresi ke 640px (sangat ringan namun tetap jelas)
-      const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
-      
-      console.log(`[Compression] Original: ${photoFile.size} bytes, Compressed: ${compressedBlob.size} bytes`);
+      let publicUrl = null;
 
-      // Batas toleransi ditingkatkan ke 8MB (Aman untuk Edge Function 10MB)
-      if (compressedBlob.size > 8 * 1024 * 1024) {
-        throw new Error("Ukuran foto masih terlalu besar (>8MB). Harap gunakan pencahayaan yang cukup.");
+      // Jika ada foto, lakukan proses upload
+      if (photoFile) {
+        const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `uploads/${user.id}/${locationId}-${timestamp}.jpg`;
+        publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
       }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `uploads/${user.id}/${locationId}-${timestamp}.jpg`;
-
-      const publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
 
       const { error: insertError } = await supabase.from('check_area_reports').insert({
         user_id: user.id,
         location_id: locationId,
-        photo_url: publicUrl,
+        photo_url: publicUrl, // Bisa null jika tidak ada foto
       });
 
       if (insertError) throw insertError;
@@ -130,55 +123,48 @@ const CheckAreaReport = () => {
 
         <CardContent className="space-y-6">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Ambil foto selfie di lokasi sebagai bukti kehadiran patroli Anda.
+            Tekan tombol kirim di bawah untuk menyelesaikan laporan patroli. Anda juga dapat menyertakan foto (opsional).
           </p>
 
           <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center shadow-inner">
             {photoPreviewUrl ? (
-              <img 
-                src={photoPreviewUrl} 
-                alt="Pratinjau Laporan" 
-                className="w-full h-full object-cover"
-              />
+              <img src={photoPreviewUrl} alt="Pratinjau" className="w-full h-full object-cover" />
             ) : (
               <div className="text-center p-6 space-y-2 text-slate-400">
                 <Camera className="h-12 w-12 mx-auto stroke-[1.5]" />
-                <p className="text-xs font-medium">Belum ada foto yang diambil</p>
+                <p className="text-xs font-medium">Foto Bukti (Opsional)</p>
               </div>
             )}
           </div>
 
           <input 
-            type="file" 
-            accept="image/*" 
-            capture="user" 
-            onChange={handlePhotoChange} 
-            ref={fileInputRef} 
-            className="hidden" 
+            type="file" accept="image/*" capture="environment" 
+            onChange={handlePhotoChange} ref={fileInputRef} className="hidden" 
           />
 
           <div className="space-y-3">
             <Button 
               onClick={() => fileInputRef.current?.click()} 
-              className="w-full py-6 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-2xl flex items-center justify-center space-x-2 transition-all duration-200"
+              variant="outline"
+              className="w-full py-6 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center space-x-2"
             >
               <Camera className="h-5 w-5" />
-              <span>{photoFile ? "Ambil Ulang Foto" : "Ambil Foto Selfie"}</span>
+              <span>{photoFile ? "Ganti Foto" : "Ambil Foto (Opsional)"}</span>
             </Button>
 
             <Button 
               onClick={handleSubmitReport} 
-              disabled={!photoFile || loading}
-              className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-400 flex items-center justify-center space-x-2"
+              disabled={loading}
+              className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all duration-200 flex items-center justify-center space-x-2"
             >
               <CheckCircle2 className="h-5 w-5" />
-              <span>Kirim Laporan Patroli</span>
+              <span>Kirim Laporan Sekarang</span>
             </Button>
 
             <Button 
               onClick={() => navigate('/satpam-dashboard')} 
               variant="ghost" 
-              className="w-full py-6 text-slate-500 hover:text-slate-700 dark:text-slate-400 rounded-2xl flex items-center justify-center space-x-2"
+              className="w-full py-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 rounded-2xl flex items-center justify-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Batal</span>

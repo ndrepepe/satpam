@@ -39,13 +39,11 @@ const AparReport = () => {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let { width, height } = img;
-          
           if (width > height) {
             if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
           } else {
             if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
           }
-
           canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
@@ -61,27 +59,16 @@ const AparReport = () => {
       return;
     }
 
-    if (!photoFile) {
-      toast.error("Harap ambil foto selfie bersama APAR terlebih dahulu.");
-      return;
-    }
-
     setLoading(true);
     try {
-      // Kompresi ke 640px (sangat ringan)
-      const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
-      
-      console.log(`[Compression] Original: ${photoFile.size} bytes, Compressed: ${compressedBlob.size} bytes`);
+      let publicUrl = null;
 
-      // Batas toleransi ditingkatkan ke 8MB
-      if (compressedBlob.size > 8 * 1024 * 1024) {
-        throw new Error("Ukuran foto masih terlalu besar (>8MB). Harap kurangi resolusi kamera Anda.");
+      if (photoFile) {
+        const compressedBlob = await compressImage(photoFile, 640, 640, 0.5);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.jpg`;
+        publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
       }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.jpg`;
-
-      const publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
 
       const { error } = await supabase.from('apar_reports').insert({
         apar_location_id: aparId,
@@ -120,71 +107,43 @@ const AparReport = () => {
           <div className="space-y-3">
             <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Kondisi Fisik & Tekanan</label>
             <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={() => setStatus('baik')}
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'baik' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}
-              >
+              <button onClick={() => setStatus('baik')} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'baik' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}>
                 <div className="flex items-center"><CheckCircle className="mr-3 h-5 w-5" /> <span>Kondisi Baik</span></div>
-                {status === 'baik' && <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />}
               </button>
-              <button 
-                onClick={() => setStatus('perlu_perbaikan')}
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'perlu_perbaikan' ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}
-              >
+              <button onClick={() => setStatus('perlu_perbaikan')} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'perlu_perbaikan' ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}>
                 <div className="flex items-center"><AlertTriangle className="mr-3 h-5 w-5" /> <span>Perlu Perbaikan</span></div>
-                {status === 'perlu_perbaikan' && <div className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />}
               </button>
-              <button 
-                onClick={() => setStatus('rusak')}
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'rusak' ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}
-              >
+              <button onClick={() => setStatus('rusak')} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${status === 'rusak' ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-900/60 border-slate-800 text-slate-400'}`}>
                 <div className="flex items-center"><XCircle className="mr-3 h-5 w-5" /> <span>Rusak / Kosong</span></div>
-                {status === 'rusak' && <div className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />}
               </button>
             </div>
           </div>
 
           <div className="space-y-3">
-            <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Foto Selfie Bersama APAR</label>
+            <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Bukti Foto (Opsional)</label>
             <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shadow-inner">
               {photoPreviewUrl ? (
-                <img 
-                  src={photoPreviewUrl} 
-                  alt="Pratinjau Selfie APAR" 
-                  className="w-full h-full object-cover"
-                />
+                <img src={photoPreviewUrl} alt="Pratinjau" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center p-6 space-y-2 text-slate-500">
-                  <Camera className="h-12 w-12 mx-auto stroke-[1.5]" />
-                  <p className="text-xs font-medium">Belum ada foto selfie</p>
+                  <Camera className="h-10 w-10 mx-auto stroke-[1.5]" />
+                  <p className="text-xs font-medium">Opsional</p>
                 </div>
               )}
             </div>
-
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="user" 
-              onChange={handlePhotoChange} 
-              ref={fileInputRef} 
-              className="hidden" 
-            />
-
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} ref={fileInputRef} className="hidden" />
             <Button 
-              type="button"
-              onClick={() => fileInputRef.current?.click()} 
-              className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-mono text-xs uppercase rounded-xl flex items-center justify-center space-x-2 transition-all duration-200"
+              type="button" onClick={() => fileInputRef.current?.click()} 
+              variant="outline" className="w-full py-4 bg-slate-900 border-slate-800 text-slate-400 font-mono text-xs uppercase rounded-xl"
             >
-              <Camera className="h-4 w-4 text-orange-500" />
-              <span>{photoFile ? "Ambil Ulang Foto" : "Ambil Foto Selfie"}</span>
+              {photoFile ? "Ganti Foto" : "Ambil Foto (Opsional)"}
             </Button>
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Catatan Tambahan (Opsional)</label>
             <textarea 
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={notes} onChange={(e) => setNotes(e.target.value)}
               placeholder="Jelaskan detail jika ada temuan..."
               className="w-full bg-slate-900/80 border-slate-800 text-white rounded-xl p-4 h-24 outline-none focus:ring-2 focus:ring-orange-500/30"
             />
@@ -193,17 +152,12 @@ const AparReport = () => {
           <div className="space-y-3 pt-2">
             <Button 
               onClick={handleSubmit} 
-              disabled={loading || !status || !photoFile}
-              className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white rounded-xl py-6 font-bold uppercase tracking-widest shadow-lg shadow-orange-900/20 disabled:bg-slate-800 disabled:text-slate-500"
+              disabled={loading || !status}
+              className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white rounded-xl py-6 font-bold uppercase tracking-widest shadow-lg shadow-orange-900/20"
             >
               <CheckCircle2 className="mr-2 h-5 w-5" /> Kirim Laporan APAR
             </Button>
-            
-            <Button 
-              variant="ghost" 
-              onClick={() => navigate(-1)} 
-              className="w-full text-slate-400 hover:text-white"
-            >
+            <Button variant="ghost" onClick={() => navigate(-1)} className="w-full text-slate-400">
               <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
             </Button>
           </div>
