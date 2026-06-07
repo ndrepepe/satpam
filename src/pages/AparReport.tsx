@@ -39,11 +39,17 @@ const AparReport = () => {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let { width, height } = img;
-          if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+          
+          if (width > height) {
+            if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+          } else {
+            if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+          }
+
           canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => blob ? resolve(blob) : reject(), file.type, quality);
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(), 'image/jpeg', quality);
         };
       };
     });
@@ -62,17 +68,18 @@ const AparReport = () => {
 
     setLoading(true);
     try {
-      // 1. Kompres foto selfie
-      const compressedBlob = await compressImage(photoFile, 1024, 1024, 0.7);
+      // Kompresi lebih agresif (800px, kualitas 0.6)
+      const compressedBlob = await compressImage(photoFile, 800, 800, 0.6);
       
-      const fileExt = compressedBlob.type.split('/')[1] || 'jpg';
+      if (compressedBlob.size > 2 * 1024 * 1024) {
+        throw new Error("Ukuran foto masih terlalu besar. Coba gunakan kamera belakang atau kurangi guncangan.");
+      }
+
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.${fileExt}`;
+      const filename = `uploads/apar/${user.id}/${aparId}-${timestamp}.jpg`;
 
-      // 2. Unggah foto selfie ke Supabase Storage
-      const publicUrl = await uploadToSupabase(compressedBlob, filename, compressedBlob.type);
+      const publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
 
-      // 3. Simpan laporan ke database (termasuk photo_url Supabase Storage)
       const { error } = await supabase.from('apar_reports').insert({
         apar_location_id: aparId,
         user_id: user.id,
@@ -83,7 +90,6 @@ const AparReport = () => {
 
       if (error) throw error;
 
-      // 4. Update status jadwal jika ada
       const today = new Date().toISOString().split('T')[0];
       await supabase.from('apar_schedules')
         .update({ status: 'completed' })
@@ -108,7 +114,6 @@ const AparReport = () => {
           <CardTitle className="text-white uppercase tracking-widest font-bold">Laporan Kondisi APAR</CardTitle>
         </CardHeader>
         <CardContent className="pt-6 space-y-6">
-          {/* Pilihan Kondisi */}
           <div className="space-y-3">
             <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Kondisi Fisik & Tekanan</label>
             <div className="grid grid-cols-1 gap-3">
@@ -136,7 +141,6 @@ const AparReport = () => {
             </div>
           </div>
 
-          {/* Bukti Foto Selfie */}
           <div className="space-y-3">
             <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Foto Selfie Bersama APAR</label>
             <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shadow-inner">
@@ -173,7 +177,6 @@ const AparReport = () => {
             </Button>
           </div>
 
-          {/* Catatan Tambahan */}
           <div className="space-y-2">
             <label className="text-xs font-mono text-slate-400 uppercase tracking-widest">Catatan Tambahan (Opsional)</label>
             <textarea 
@@ -184,7 +187,6 @@ const AparReport = () => {
             />
           </div>
 
-          {/* Tombol Kirim */}
           <div className="space-y-3 pt-2">
             <Button 
               onClick={handleSubmit} 

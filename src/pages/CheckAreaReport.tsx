@@ -51,11 +51,17 @@ const CheckAreaReport = () => {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let { width, height } = img;
-          if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+          
+          if (width > height) {
+            if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+          } else {
+            if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+          }
+
           canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => blob ? resolve(blob) : reject(), file.type, quality);
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(), 'image/jpeg', quality);
         };
       };
     });
@@ -65,16 +71,19 @@ const CheckAreaReport = () => {
     if (!user || !locationId || !photoFile) return;
     setLoading(true);
     try {
-      const compressedBlob = await compressImage(photoFile, 1024, 1024, 0.7);
+      // Kompresi lebih agresif (800px, kualitas 0.6) untuk memastikan di bawah limit Edge Function
+      const compressedBlob = await compressImage(photoFile, 800, 800, 0.6);
       
-      const fileExt = compressedBlob.type.split('/')[1] || 'jpg';
+      // Validasi ukuran akhir
+      if (compressedBlob.size > 2 * 1024 * 1024) {
+        throw new Error("Foto terlalu besar bahkan setelah dikompres. Gunakan pencahayaan yang lebih baik.");
+      }
+
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `uploads/${user.id}/${locationId}-${timestamp}.${fileExt}`;
+      const filename = `uploads/${user.id}/${locationId}-${timestamp}.jpg`;
 
-      // Unggah foto selfie ke Supabase Storage
-      const publicUrl = await uploadToSupabase(compressedBlob, filename, compressedBlob.type);
+      const publicUrl = await uploadToSupabase(compressedBlob, filename, 'image/jpeg');
 
-      // Simpan laporan ke database dengan URL foto Supabase Storage
       const { error: insertError } = await supabase.from('check_area_reports').insert({
         user_id: user.id,
         location_id: locationId,
@@ -122,7 +131,6 @@ const CheckAreaReport = () => {
             Ambil foto selfie di lokasi sebagai bukti kehadiran patroli Anda.
           </p>
 
-          {/* Photo Preview Area */}
           <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center shadow-inner">
             {photoPreviewUrl ? (
               <img 
