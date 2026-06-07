@@ -1,9 +1,11 @@
 "use client";
 
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Mengunggah file ke Supabase Storage melalui Edge Function menggunakan payload biner ArrayBuffer
+ * Mengunggah file ke Supabase Storage melalui Edge Function menggunakan fetch manual
+ * Cara ini jauh lebih stabil untuk perangkat mobile dibandingkan menggunakan SDK invoke.
  */
 export const uploadToSupabase = async (
   fileBlob: Blob,
@@ -15,7 +17,6 @@ export const uploadToSupabase = async (
     let userId = '';
     let locationIdWithTimestamp = '';
 
-    // Menentukan struktur path berdasarkan jumlah bagian (patroli biasa vs apar)
     if (parts.length === 3) {
       userId = parts[1];
       locationIdWithTimestamp = parts[2];
@@ -23,20 +24,21 @@ export const uploadToSupabase = async (
       userId = parts[2];
       locationIdWithTimestamp = parts[3];
     } else {
-      throw new Error(`Format path file tidak didukung: ${fileName}`);
+      throw new Error(`Format path tidak didukung: ${fileName}`);
     }
 
     const locationId = locationIdWithTimestamp.split('-')[0];
+    const functionUrl = `${SUPABASE_URL}/functions/v1/upload-selfie-to-supabase`;
 
-    // Konversi Blob ke ArrayBuffer (Lebih stabil untuk transmisi biner antar browser)
-    const arrayBuffer = await fileBlob.arrayBuffer();
+    console.log(`[Supabase Storage] Mengunggah biner secara manual ke: ${functionUrl}`);
 
-    console.log(`[Supabase Storage] Mengirim biner (${arrayBuffer.byteLength} bytes) ke Edge Function...`);
-
-    // Memanggil Edge Function
-    const { data, error } = await supabase.functions.invoke('upload-selfie-to-supabase', {
-      body: arrayBuffer,
+    // Menggunakan fetch manual untuk kontrol penuh dan stabilitas maksimal di mobile
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      body: fileBlob,
       headers: {
+        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
         'x-user-id': userId,
         'x-location-id': locationId,
         'x-file-name': fileName,
@@ -44,31 +46,30 @@ export const uploadToSupabase = async (
       }
     });
 
-    if (error) {
-      console.error("[Supabase Storage] Error dari Edge Function:", error);
-      // Mencoba membaca detail error jika ada
-      const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : "Unknown Function Error");
-      throw new Error(errorMsg);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[Supabase Storage] Server merespon dengan error:", errorText);
+      throw new Error(`Server Error (${response.status}): ${errorText}`);
     }
 
+    const data = await response.json();
+
     if (!data?.publicUrl) {
-      console.error("[Supabase Storage] Respon tidak mengandung publicUrl:", data);
-      throw new Error("Respon server tidak lengkap (publicUrl kosong).");
+      throw new Error("Respon server tidak mengandung publicUrl.");
     }
 
     return data.publicUrl;
   } catch (error: any) {
-    console.error("[Supabase Storage] Gagal mengunggah:", error);
+    console.error("[Supabase Storage] Kegagalan kritis pengunggahan:", error);
     
-    // Memberikan pesan error yang informatif ke UI
-    let friendlyMessage = "Gagal mengirim laporan ke server.";
-    if (error.message?.includes('failed to fetch')) {
-      friendlyMessage += " Koneksi ke server terputus atau diblokir (CORS/Firewall).";
+    let msg = "Gagal mengirim laporan ke server.";
+    if (error.message?.includes('failed to fetch') || error.name === 'TypeError') {
+      msg += " Masalah jaringan atau ukuran file terlalu besar untuk koneksi Anda.";
     } else {
-      friendlyMessage += ` Detail: ${error.message}`;
+      msg += ` Detail: ${error.message}`;
     }
     
-    throw new Error(friendlyMessage);
+    throw new Error(msg);
   }
 };
 
